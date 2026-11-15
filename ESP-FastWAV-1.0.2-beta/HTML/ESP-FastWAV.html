@@ -1,0 +1,1796 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ESP-FastWAV · audio progressif par radio</title>
+<style>
+:root{color-scheme:dark;--bg:#08111b;--panel:#121f2d;--line:#304455;--ink:#e6f1f5;--muted:#9db6c5;--accent:#58d7bb;--orange:#ffd188}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,Segoe UI,sans-serif}main{max-width:1450px;margin:auto;padding:22px}h1{margin:0;font-size:2rem}h2{font-size:1.15rem;margin:0 0 13px}p{margin:6px 0 12px;color:var(--muted)}header{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap;margin-bottom:18px}.eyebrow{color:var(--accent);font-size:.76rem;font-weight:750;letter-spacing:.12em;text-transform:uppercase}.badge{border:1px solid #386459;padding:7px 12px;border-radius:25px;color:var(--accent);font-size:.8rem}.panel{padding:18px;background:var(--panel);border:1px solid var(--line);border-radius:14px;margin-bottom:15px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.two{grid-template-columns:repeat(2,minmax(0,1fr))}.field label{display:block;font-weight:650;font-size:.8rem;color:#bdd2dc;margin-bottom:5px}input,select,button{font:inherit}input:not([type=checkbox]):not([type=range]),select{width:100%;padding:10px;border:1px solid #3d576a;background:#0b1622;color:var(--ink);border-radius:8px;min-height:43px}input[type=file]{font-size:.85rem}button{padding:10px 14px;border:1px solid #48667b;border-radius:8px;color:var(--ink);background:#263f52;cursor:pointer;font-weight:650}button.primary{background:#116859;border-color:#239d83}button.danger{background:#73313d;border-color:#a95463}button:hover:not(:disabled){filter:brightness(1.15)}button:disabled,input:disabled,select:disabled{opacity:.45;cursor:not-allowed}.row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.row>button{flex:1}.status{margin-top:12px;border-left:3px solid var(--accent);padding:10px 12px;background:#0b2a32;border-radius:6px;overflow-wrap:anywhere}.error{border-color:#ff9c9c!important;background:#3d222d!important;color:#ffdada!important}.note{font-size:.8rem;color:var(--muted)}.warn{color:var(--orange)}.strong{color:var(--ink)}.space{margin-top:14px}progress{width:100%;height:13px;accent-color:var(--accent)}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:12px}.metric{border:1px solid #294052;border-radius:9px;padding:10px;background:#0b1722}.metric b{display:block;font-size:1.3rem;font-variant-numeric:tabular-nums}.metric span{font-size:.72rem;color:var(--muted)}canvas{width:100%;height:150px;background:#07101a;border:1px solid #263d4f;border-radius:9px}audio{width:100%;height:40px}details{margin-top:12px}summary{cursor:pointer;color:var(--accent)}#log{max-height:150px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#07101a;padding:10px;font:12px/1.45 ui-monospace,Consolas,monospace;border-radius:8px}.hidden{display:none!important}#qualityBadge{font-weight:750;color:var(--accent)}.hash{overflow-wrap:anywhere;font:11px/1.5 ui-monospace,Consolas,monospace}footer{color:var(--muted);font-size:.77rem;margin-top:10px}a{color:#89c9ff}@media(max-width:950px){.grid{grid-template-columns:1fr}.fields{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:500px){main{padding:10px}.fields,.two{grid-template-columns:1fr}.metrics{grid-template-columns:1fr 1fr}h1{font-size:1.6rem}}
+</style></head><body><main>
+<header><div><div class="eyebrow">Aperçu complet → échantillons précis entrelacés</div><h1>ESP-FastWAV</h1><p>Écouter rapidement toute la piste, puis choisir la version qui vous convient.</p></div><div class="badge">SIMPLEX · 1,5 Mbaud · boucle illimitée</div></header>
+<section class="panel"><h2>Radio</h2><div class="fields">
+<div class="field"><label for="role">Poste</label><select id="role"><option value="rx">Récepteur</option><option value="tx">Émetteur</option></select></div>
+<div class="field"><label for="frequency">Fréquence RF (MHz)</label><input id="frequency" type="number" min="2401" max="2482.5" step="0.0001" value="2442.3125"></div>
+<div class="field"><label for="apwr">Puissance TX — APWR (0 fort, 191 faible)</label><input id="apwr" type="number" min="0" max="191" step="1" value="63"></div>
+</div><details><summary>Réglage RX</summary><div class="field space"><label for="fine">Correction fréquence RX (Hz)</label><input id="fine" type="number" min="-50000" max="50000" step="100" value="0"></div><p class="note">Firmware série corrigé à 1 500 000 bauds, PCM radio 120 000 éch/s, MPX4/CRC. Aucun pilote à modifier. Un ESP par poste.</p></details>
+<div class="row space"><button id="connect" class="primary">Connecter USB</button><button id="disconnect" disabled>Déconnecter</button></div><div id="status" class="status" role="status">Choisir le rôle puis connecter l’ESP.</div></section>
+<div class="grid"><section class="panel"><h2>Émetteur · préparer la musique</h2>
+<div class="field"><label for="file">Fichier audio — WAV ou format décodable par le navigateur</label><input id="file" type="file" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a"></div><p id="sourceInfo" class="note">Aucun fichier sélectionné.</p><audio id="sourcePlayer" controls preload="metadata"></audio>
+<div class="fields two space"><div class="field"><label for="start">Début de l’extrait (mm:ss ou secondes)</label><input id="start" value="0:00"></div><div class="field"><label for="end">Fin de l’extrait (mm:ss ou secondes)</label><input id="end" value="1:00"></div></div>
+<div class="fields space">
+<div class="field"><label for="targetRate">Cadence audio cible</label><select id="targetRate"><option value="8000">8 000 Hz</option><option value="12000">12 000 Hz</option><option value="16000">16 000 Hz</option><option value="24000" selected>24 000 Hz</option><option value="32000">32 000 Hz</option><option value="44100">44 100 Hz</option><option value="48000">48 000 Hz</option></select></div>
+<div class="field"><label for="targetBits">Quantification cible</label><select id="targetBits"><option value="8">8 bits</option><option value="16" selected>16 bits</option></select></div>
+<div class="field"><label for="channels">Voies</label><select id="channels"><option value="mono">Mono</option><option value="stereo">Stéréo gauche/droite</option><option value="midside">Stéréo Mid/Side</option></select></div>
+<div class="field"><label for="previewRate">Aperçu mono — 8 bits</label><select id="previewRate"><option value="4000" selected>4 000 Hz · plus rapide</option><option value="8000">8 000 Hz</option><option value="12000">12 000 Hz · plus détaillé</option></select></div>
+<div class="field"><label for="phases">Sous-ensembles HQ sur toute la piste</label><select id="phases"><option value="4">4 passes par voie</option><option value="8" selected>8 passes par voie</option><option value="10">10 passes par voie</option></select></div>
+<div class="field"><label for="hqMode">Raffinement</label><select id="hqMode"><option value="analog">Analogique rapide · estimé</option><option value="exact">PCM vérifié · plus lent</option></select></div>
+</div><details><summary>Protection du PCM vérifié</summary><div class="field space"><label for="fec">Redondance FEC numérique (0 à 800 %)</label><input id="fec" type="number" min="0" max="800" step="25" value="100"></div><p class="note">800 % ajoute huit parts de réparation pour une part utile. Ce réglage ne transforme pas les amplitudes analogiques en PCM exact.</p></details>
+<p class="note">Les bits choisis définissent le PCM préparé. La fidélité du mode analogique reste estimée ; seul le mode vérifié peut confirmer les valeurs PCM cibles par empreinte.</p>
+<div class="row"><button id="prepare" class="primary" disabled>Préparer l’extrait</button><button id="cancelPrepare" disabled>Annuler</button></div>
+<div id="preparedInfo" class="status">Préparer avant de lancer TX.</div><canvas id="sourceWave" width="960" height="180" aria-label="Forme de l’aperçu préparé"></canvas>
+<div class="row space"><button id="startTx" class="primary" disabled>Émettre en boucle</button><button id="stopTx" class="danger" disabled>Arrêter TX</button></div><div id="txStatus" class="note space">La boucle s’arrête uniquement sur action de l’utilisateur ou défaut de transmission.</div><div id="txEstimate" class="note"></div>
+</section>
+<section class="panel"><h2>Récepteur · écouter chaque version</h2><div id="rxTitle" class="note">En attente d’une piste.</div><div id="qualityBadge" class="status">Aucune musique reçue</div>
+<div class="space"><label class="note" for="previewProgress">Couverture de l’aperçu complet</label><progress id="previewProgress" max="100" value="0"></progress><div id="previewText" class="note">0 %</div></div>
+<div class="space"><label class="note" for="hqProgress">Positions haute résolution reçues</label><progress id="hqProgress" max="100" value="0"></progress><div id="hqText" class="note">0 % · estimées et vérifiées distinguées</div></div>
+<canvas id="receivedWave" width="960" height="180" class="space" aria-label="Forme de l’aperçu reçu"></canvas><p class="note">Tracé de l’aperçu reçu. Les trous restent identifiés ; la lecture peut utiliser une reconstruction estimée.</p>
+<div class="fields two"><div class="field"><label for="quality">Version à écouter / exporter</label><select id="quality"><option value="auto">Automatique</option><option value="preview">Aperçu mono stable</option><option value="estimated">Reconstruction progressive estimée</option><option value="mono">Reconstruction mono</option><option value="stereo">Reconstruction stéréo</option><option value="verified" id="verifiedOption" disabled>PCM cible vérifié</option></select></div><div class="field"><label for="exportBits">WAV exporté</label><select id="exportBits"><option value="8">8 bits</option><option value="16" selected>16 bits</option></select></div></div>
+<div class="row space"><button id="play" class="primary" disabled>Écouter</button><button id="pause" disabled>Pause</button><button id="freeze" disabled>Figer cette version</button></div>
+<div class="row space"><input id="seek" type="range" min="0" max="1" step="0.01" value="0" style="flex:1"><span id="playTime" class="note">0:00 / 0:00</span></div><div class="row"><label for="volume" class="note">Volume</label><input id="volume" type="range" min="0" max="1" step="0.01" value="0.7" style="flex:1"></div>
+<div class="row space"><button id="export" disabled>Exporter cette version WAV</button><button id="resetRx">Effacer la réception</button></div><div id="playStatus" class="note space">Les réglages de lecture n’altèrent pas les échantillons conservés.</div>
+<p class="note warn">En SIMPLEX, « Figer » agit sur ce récepteur. L’émetteur distant continue : il faut l’arrêter sur son poste.</p>
+<div class="metrics"><div class="metric"><b id="rxRate">0</b><span>PCM radio reçus · ko/s</span></div><div class="metric"><b id="passes">0</b><span>Cycle / passe reçue</span></div><div class="metric"><b id="crc">0</b><span>Trames série CRC rejetées</span></div><div class="metric"><b id="txRate">0</b><span>PCM radio envoyés · ko/s</span></div><div class="metric"><b id="jitter">0</b><span>Retard TX maximal · ms</span></div><div class="metric"><b id="underruns">0</b><span>Manques du lecteur audio</span></div></div>
+<div id="hashInfo" class="hash space"></div><details><summary>Comprendre la progression</summary><p class="note">L’aperçu filtré parcourt toute la chanson en premier. Les passes suivantes apportent des positions HQ réparties du début à la fin. Le récepteur conserve ses points validés entre les cycles. Une forte couverture ne signifie pas automatiquement un son propre : des points clairsemés peuvent produire des artefacts. Le mode Aperçu stable reste disponible. « Stable estimé » décrit une répétabilité mesurée ; « PCM cible vérifié » exige les valeurs numériques complètes et leurs SHA-256.</p></details>
+</section></div>
+<section class="panel"><h2>État de la station</h2><div id="continuity" class="note">Traitement et lecture dans des tâches séparées. Garder la page ouverte et l’ordinateur éveillé. L’arrière-plan dépend des politiques du navigateur ; les retards et interruptions sont signalés.</div><pre id="log" aria-live="polite"></pre></section>
+<footer>ESP-FastWAV · radio FM propriétaire à 2,4 GHz · aucun bruit radio simulé. Fichiers traités localement, aucun service distant. TX/RX utilisent le même protocole FastWAV ; les anciens logiciels TV/Picture ne reconstruisent pas cette musique. Version 1.0.2 · 2026-11-14 · lecture locale compatible</footer>
+</main>
+<script type="text/plain" id="fastwav-worker">
+
+/*
+  CB-VIDEO HTMLv4 / 120 ksample/s -- real PCM8, explicit RED loss pixels, no simulated RF noise.
+  Retains CB FM STEREO V12 radio processing; negotiates MPX4 CRC32 with legacy MPX3 fallback.
+  VIDEO pixels remain direct RF. Optional DATA symbols add file-layer CRC/FEC only.
+  H/V pulse detection controls the raster only. Actual RF distortion remains visible.
+*/
+(function(root){
+'use strict';
+const FS=120000, HSYNC=24, BLACK=12, WHITE=12, PRE=8, POST=12;
+const VSYNC=168, VPORCH=24, VBLANK=VSYNC+VPORCH;
+// Reserved-endpoint vertical marker: LOW 48, WHITE 12, LOW 48, WHITE 12, LOW 48.
+// Same 168 samples as V4: frame rate is unchanged.
+const VSEGMENTS=Object.freeze([[0,48,true],[48,60,false],[60,108,true],[108,120,false],[120,168,true]]);
+const HOVER=HSYNC+BLACK+WHITE+PRE+POST; // 68 samples per physical line
+const PIXEL_OFFSET=HSYNC+BLACK+WHITE+PRE;
+const SYNC=-110, BLACK_REF=-48, WHITE_REF=88, PIXEL_BLACK=-38, PIXEL_WHITE=78;
+const clamp=(v,lo,hi)=>v<lo?lo:v>hi?hi:v;
+const enc=v=>(v+256)&255;
+const formats=[];
+const resolutions=[[64,48],[80,60],[96,72],[128,96],[160,120],[192,144],[256,192],[320,240]];
+for(const [w,h] of resolutions)formats.push({id:`bw${w}`,label:`${w} × ${h} · progressive B&W`,kind:'mono',w,h,spp:1});
+formats.push({id:'bw320stable',label:'320 × 240 · B&W stable (2 samples/pixel)',kind:'mono',w:320,h:240,spp:2});
+// HTMLv3: full-resolution progressive monochrome, 1 or 2 PCM8 samples per pixel.
+// H/V timing and reference porches are identical to HTMLv2; only raster size differs.
+formats.push({id:'bw640',label:'640 × 480 · B&W (1 sample/pixel)',kind:'mono',w:640,h:480,spp:1});
+formats.push({id:'bw640stable',label:'640 × 480 · B&W stable (2 samples/pixel)',kind:'mono',w:640,h:480,spp:2});
+for(const [w,h] of resolutions.filter(([w])=>w<=256))formats.push({id:`col${w}`,label:`${w} × ${h} · YUV 4:2:0 color`,kind:'color',w,h,spp:1});
+// Slow color mode: repeat each transmitted Y, U and V sample twice for analog robustness.
+formats.push({id:'col256stable',label:'256 × 192 · YUV 4:2:0 color stable (2 samples/pixel)',kind:'color',w:256,h:192,spp:2});
+const byId=new Map(formats.map(f=>[f.id,Object.freeze(f)]));
+function getFormat(id){const m=byId.get(id);if(!m)throw Error('Unknown video format: '+id);return m;}
+function getPlan(id){
+ const m=typeof id==='string'?getFormat(id):id,rows=[];
+ if(m.kind==='mono')for(let y=0;y<m.h;y++)rows.push({plane:'y',y,width:m.w,spp:m.spp,len:HOVER+m.w*m.spp});
+ if(m.kind==='color'){
+  for(let y=0;y<m.h;y++)rows.push({plane:'y',y,width:m.w,spp:m.spp,len:HOVER+m.w*m.spp});
+  for(const plane of ['u','v'])for(let y=0;y<m.h/2;y++)rows.push({plane,y,width:m.w/2,spp:m.spp,len:HOVER+(m.w/2)*m.spp});
+ }
+ const fieldSamples=VBLANK+rows.reduce((s,row)=>s+row.len,0);
+ return {mode:m,rows,fieldSamples,fieldsPerFrame:1,fieldFps:FS/fieldSamples,frameFps:FS/fieldSamples};
+}
+const planCache=new Map(formats.map(m=>[m.id,getPlan(m)]));
+const plan=id=>planCache.get(typeof id==='string'?id:id.id);
+function patternRGBA(modeId){
+ const m=getFormat(modeId),rgba=new Uint8ClampedArray(m.w*m.h*4);
+ for(let y=0;y<m.h;y++)for(let x=0;x<m.w;x++){
+  const i=4*(y*m.w+x),check=(((x/(m.w/8))|0)+((y/(m.h/6))|0))&1;
+  let r=check?195:43,g=r,b=r;
+  if(x>m.w*.34&&x<m.w*.67&&y>m.h*.28&&y<m.h*.78){r=g=b=Math.round(255*(x/m.w-.34)/.33);}
+  if(m.kind==='color'&&y>m.h*.76){
+   const bar=Math.min(5,Math.floor(x/m.w*6));
+   [[224,52,53],[236,178,52],[54,195,113],[39,157,224],[156,90,226],[231,87,164]][bar].forEach((v,k)=>{if(k===0)r=v;else if(k===1)g=v;else b=v;});
+  }
+  rgba[i]=r;rgba[i+1]=g;rgba[i+2]=b;rgba[i+3]=255;
+ }
+ return rgba;
+}
+function sourceFromRGBA(modeId,rgba){
+ const m=getFormat(modeId),size=m.w*m.h;
+ if(!rgba||rgba.length!==size*4)throw Error('Invalid RGBA source image');
+ const y=new Uint8Array(size),u=m.kind==='color'?new Uint8Array(size/4):null,v=m.kind==='color'?new Uint8Array(size/4):null;
+ // BT.601 full-range YUV. Chrominance is averaged over 2x2 spatial blocks.
+ for(let py=0;py<m.h;py++)for(let px=0;px<m.w;px++){
+  const j=4*(py*m.w+px),r=rgba[j],g=rgba[j+1],b=rgba[j+2];
+  y[py*m.w+px]=clamp(Math.round(.299*r+.587*g+.114*b),0,255);
+ }
+ if(m.kind==='color')for(let py=0;py<m.h;py+=2)for(let px=0;px<m.w;px+=2){
+  let us=0,vs=0;
+  for(let dy=0;dy<2;dy++)for(let dx=0;dx<2;dx++){
+   const p=(py+dy)*m.w+px+dx,j=p*4,yy=y[p];
+   us+=(rgba[j+2]-yy)/1.772+128;
+   vs+=(rgba[j]-yy)/1.402+128;
+  }
+  const k=(py/2)*(m.w/2)+px/2;
+  u[k]=clamp(Math.round(us/4),0,255);
+  v[k]=clamp(Math.round(vs/4),0,255);
+ }
+ return {id:m.id,y,u,v};
+}
+function makeWave(source,modeId){
+ const p=plan(modeId),m=p.mode;
+ if(!source||source.id!==m.id)throw Error('Source/mode mismatch');
+ const wave=new Uint8Array(p.fieldSamples),put=(value,count)=>{wave.fill(enc(value),at,at+count);at+=count;};
+ let at=0;
+ for(const [lo,hi,isSync] of VSEGMENTS)put(isSync?SYNC:WHITE_REF,hi-lo);
+ put(BLACK_REF,VPORCH);
+ for(const row of p.rows){
+  put(SYNC,HSYNC);put(BLACK_REF,BLACK);put(WHITE_REF,WHITE);put(BLACK_REF,PRE);
+  const arr=row.plane==='u'?source.u:row.plane==='v'?source.v:source.y;
+  for(let x=0;x<row.width;x++){
+   let lum;
+   lum=arr[row.y*row.width+x];
+   const signed=PIXEL_BLACK+Math.round((PIXEL_WHITE-PIXEL_BLACK)*lum/255);
+   put(signed,row.spp);
+  }
+  put(BLACK_REF,POST);
+ }
+ if(at!==wave.length)throw Error('Scan timing: unexpected frame length');
+ return wave;
+}
+class Decoder{
+ constructor({mode='bw320',threshold=-78,brightness=0,contrast=1,saturation=1,hPosition=0,hHold=0,vHold=0,hLock=.85,onFrame=()=>{}}={}){
+  this.onFrame=onFrame;this.onHSignal=null;
+  this.totalSamples=0;this.totalMissing=0;this.invalidSamples=0;this.gapSamples=0;
+  this.redPixelsLast=0;this.verticalSyncs=0;this.horizontalSyncs=0;
+  this.fields=0;this.frames=0;this.falseH=0;this.hLost=0;this.hPhaseError=0;
+  this.hReacquired=0;this.vRejected=0;
+  this.threshold=threshold;this.autoThreshold=true;this.syncThresholdUsed=threshold;
+  this.brightness=brightness;this.contrast=contrast;this.saturation=saturation;
+  this.hPosition=hPosition;this.hHold=hHold;this.vHold=vHold;this.hLock=hLock;
+  this.setMode(mode);
+ }
+ setMode(id){
+  this.p=plan(id);this.m=this.p.mode;this.row=0;
+  this.lineLengths=[...new Set(this.p.rows.map(row=>row.len))];
+  this.lineStart=this.totalSamples+VBLANK;this.autoPeriod=0;
+  this.anchored=false;this.hLocked=false;this.hStreak=0;this.hMissStreak=0;this.hClockStarted=false;
+  this.lineSeq=0;this.hSeq=-1;this.hCandidate=null;this.hAlternative=null;
+  this.syncThresholdUsed=this.threshold;this.lowSum=0;
+  this.lastHAt=-1e12;this.lastHLineLength=0;this.lastVAt=-1e12;this.lastFrameAt=-1e12;
+  this.previousLow=false;this.lowRun=0;this.vCandidate=null;
+  // Running valid-sample sums allow a waveform-shape sync separator, not a fixed
+  // negative PCM threshold. Works through DC offset and analog gain variation.
+  this.windowEpoch=this.totalSamples;
+  this.cumSum=new Float64Array(1024);this.cumSquare=new Float64Array(1024);
+  this.cumValid=new Float64Array(1024);this.sumSoFar=0;this.squareSoFar=0;this.validSoFar=0;
+  this.hCandidates=0;this.hShapes=0;this.vCandidates=0;
+  this.lastShapeH=-1e12;this.lastVShape=-1e12;this.hShapeCandidate=null;
+  this.rxSyncMean=null;this.rxBlackMean=null;this.rxWhiteMean=null;
+  this.autoLevel=true;this.markerContrast=0;
+  this.recoverySamples=0;
+  this.fieldParity=0;
+  // A valid bit is set ONLY after an actual, non-0x80 PCM8 value has been
+  // received for that pixel. Missing positions render pure RED (255,0,0).
+  // This validity bitmap is NOT a second picture buffer or a frame gate.
+  this.y=new Uint8Array(this.m.w*this.m.h);this.y.fill(95);
+  this.yValid=new Uint8Array(this.y.length);
+  if(this.m.kind==='color'){
+   this.u=new Uint8Array(this.m.w*this.m.h/4);this.v=new Uint8Array(this.u.length);
+   this.u.fill(128);this.v.fill(128);
+   this.uValid=new Uint8Array(this.u.length);this.vValid=new Uint8Array(this.v.length);
+  }else {this.u=null;this.v=null;this.uValid=null;this.vValid=null;}
+  this.bitmap=new Uint8ClampedArray(this.m.w*this.m.h*4);
+  this.previousSample=0;this.previousSampleValid=false;
+ }
+ reset(clearCounters=false){
+  if(clearCounters){this.totalSamples=0;this.totalMissing=0;this.invalidSamples=0;this.gapSamples=0;this.redPixelsLast=0;this.verticalSyncs=0;this.horizontalSyncs=0;this.fields=0;this.frames=0;this.falseH=0;this.hLost=0;this.hReacquired=0;this.vRejected=0;}
+  this.setMode(this.m.id);
+ }
+ setLevels({brightness=this.brightness,contrast=this.contrast,saturation=this.saturation,threshold=this.threshold,
+   hPosition=this.hPosition,hHold=this.hHold,vHold=this.vHold,hLock=this.hLock,autoThreshold=this.autoThreshold,autoLevel=this.autoLevel}={}){
+  this.brightness=clamp(+brightness||0,-160,160);
+  this.contrast=clamp(Number.isFinite(+contrast)?+contrast:1,.1,6);
+  this.saturation=clamp(Number.isFinite(+saturation)?+saturation:1,0,3);
+  this.threshold=clamp(Number.isFinite(+threshold)?+threshold:-78,-126,-40);
+  this.autoThreshold=!!autoThreshold;this.autoLevel=!!autoLevel;
+  if(!this.autoThreshold)this.syncThresholdUsed=this.threshold;
+  this.hPosition=clamp(+hPosition||0,-this.m.w,this.m.w);
+  this.hHold=clamp(+hHold||0,-5,5);this.vHold=clamp(+vHold||0,-180,600);
+  this.hLock=clamp(Number.isFinite(+hLock)?+hLock:.85,0,1);
+ }
+ level(raw){
+  // Porches act as a sync-tip / black-level clamp. This is analog AGC/DC
+  // restoration, not a pixel-error check or digital error correction.
+  let black=PIXEL_BLACK,white=PIXEL_WHITE;
+  if(this.autoLevel && this.rxBlackMean!==null && this.rxWhiteMean!==null){
+   const gain=clamp((this.rxWhiteMean-this.rxBlackMean)/(WHITE_REF-BLACK_REF),.05,2.8);
+   black=this.rxBlackMean+(PIXEL_BLACK-BLACK_REF)*gain;
+   white=this.rxBlackMean+(PIXEL_WHITE-BLACK_REF)*gain;
+  }
+  return clamp(Math.round((255*(raw-black)/(white-black)-128)*this.contrast+128+this.brightness),0,255);
+ }
+ // H-POSITION represents a circular horizontal displacement, not clipping.
+ // YUV 4:2:0 chroma uses half as many horizontal samples as luma.
+ shiftedX(sourceX,row){
+  const offset=row.plane==='y'?this.hPosition:Math.round(this.hPosition/2);
+  return ((sourceX+offset)%row.width+row.width)%row.width;
+ }
+ paint(x,row,value){
+  const desc=this.p.rows[row],m=this.m;
+  if(desc.plane==='y'){
+   const k=desc.y*m.w+x;this.y[k]=value;this.yValid[k]=1;
+  }else if(desc.plane==='u'){
+   const k=desc.y*(m.w/2)+x;this.u[k]=value;this.uValid[k]=1;
+  }else {
+   const k=desc.y*(m.w/2)+x;this.v[k]=value;this.vValid[k]=1;
+  }
+ }
+ markMissing(x,row){
+  const desc=this.p.rows[row],m=this.m;
+  if(desc.plane==='y')this.yValid[desc.y*m.w+x]=0;
+  else if(desc.plane==='u')this.uValid[desc.y*(m.w/2)+x]=0;
+  else this.vValid[desc.y*(m.w/2)+x]=0;
+ }
+ compose(){
+  const m=this.m,rgba=this.bitmap,source=this.y,uvW=m.w/2;
+  let red=0;
+  for(let y=0;y<m.h;y++)for(let x=0;x<m.w;x++){
+   const i=y*m.w+x,j=i*4,yy=source[i];let r=yy,g=yy,b=yy;
+   let valid=this.yValid[i]===1;
+   if(m.kind==='color'){
+    const uv=(Math.floor(y/2)*uvW)+Math.floor(x/2);
+    valid=valid&&this.uValid[uv]===1&&this.vValid[uv]===1;
+    if(valid){
+     const du=(this.u[uv]-128)*this.saturation,dv=(this.v[uv]-128)*this.saturation;
+     r=clamp(Math.round(yy+1.402*dv),0,255);
+     g=clamp(Math.round(yy-.344136*du-.714136*dv),0,255);
+     b=clamp(Math.round(yy+1.772*du),0,255);
+    }
+   }
+   // RED means 'unknown video data' — never simulated radio noise.
+   if(!valid){r=255;g=0;b=0;red++;}
+   rgba[j]=r;rgba[j+1]=g;rgba[j+2]=b;rgba[j+3]=255;
+  }
+  this.redPixelsLast=red;
+  return rgba.slice();
+ }
+ emitFrame(at){
+  this.fields++;this.frames++;this.lastFrameAt=at;
+  const picture=this.compose();
+  this.onFrame(picture,{fields:this.fields,frames:this.frames,verticalSyncs:this.verticalSyncs,
+    horizontalSyncs:this.horizontalSyncs,anchored:this.anchored,hLocked:this.hLocked,
+    missingSamples:this.totalMissing,invalidSamples:this.invalidSamples,gapSamples:this.gapSamples,
+    redPixels:this.redPixelsLast,totalPixels:this.m.w*this.m.h,
+    hMisses:this.hLost,falseH:this.falseH,hReacquired:this.hReacquired,
+    hPhaseError:this.hPhaseError,lineClockErrorSamples:this.autoPeriod});
+ }
+ currentPeriod(){return this.p.rows[this.row].len+this.hHold+this.autoPeriod;}
+ advanceRaster(n,silent=false){
+  let guard=0;
+  while(n>=this.lineStart+this.currentPeriod()&&guard++<10000){
+   // The raster never rejects a line. Its H detector is only a clock/phase reference.
+   if(this.hClockStarted && this.hSeq!==this.lineSeq){
+    this.hMissStreak++;this.hLost++;
+    if(this.hMissStreak>=12){this.hLocked=false;this.hStreak=0;}
+   }
+   this.lineStart+=this.currentPeriod();
+   if(++this.row>=this.p.rows.length){
+    this.row=0;this.lineSeq=0;this.hSeq=-1;
+    // Vertical blanking breaks the ordinary H-H distance. The next H is
+    // allowed even if the V marker was lost; do not invalidate H lock.
+    this.lastHAt=-1e12;this.lastHLineLength=0;
+    if(!silent)this.emitFrame(n);
+    // Never recycle stale lines from the preceding field. Missing samples
+    // remain visible as noise in each newly scanned field.
+    this.y.fill(72);this.yValid.fill(0);
+     if(this.u){this.u.fill(128);this.v.fill(128);this.uValid.fill(0);this.vValid.fill(0);}
+    this.lineStart+=VBLANK+this.vHold;
+    // Free-run through V blanking; a recognizable next V pulse reanchors us.
+   }else{this.lineSeq++;}
+  }
+ }
+ // Prefix sums of ONLY transport-valid analog samples; no per-pixel CRC.
+ resetWaveWindow(){
+  this.windowEpoch=this.totalSamples;
+  this.cumSum.fill(0);this.cumSquare.fill(0);this.cumValid.fill(0);
+  this.sumSoFar=0;this.squareSoFar=0;this.validSoFar=0;
+  this.lastShapeH=-1e12;this.vCandidate=null;this.hShapeCandidate=null;
+ }
+ stat(lo,hi){
+  if(lo<this.windowEpoch||hi>this.totalSamples||hi-lo>900)return null;
+  const n=this.cumValid[hi&1023]-this.cumValid[lo&1023];
+  if(n<1)return null;
+  const sum=this.cumSum[hi&1023]-this.cumSum[lo&1023];
+  const sq=this.cumSquare[hi&1023]-this.cumSquare[lo&1023];
+  const mean=sum/n;
+  return {n,mean,sd:Math.sqrt(Math.max(0,sq/n-mean*mean))};
+ }
+ // H separator: 24 negative samples, followed by 12 black porch and 12
+ // bright reference samples. Compare means and flatness (relative contrast),
+ // never demand a predetermined absolute amplitude or a previous V lock.
+ finishHorizontalCandidate(n){
+  const candidate=this.hShapeCandidate;
+  if(!candidate||n<candidate.until)return;
+  this.hShapeCandidate=null;this.lastShapeH=candidate.start;
+  this.hCandidates++;this.hShapes++;
+  if(this.onHSignal)this.onHSignal(candidate.start);
+  this.onHorizontal(candidate.start,n,HSYNC,candidate.a.mean,candidate.b.mean,candidate.c.mean);
+ }
+ detectHorizontal(n){
+  const start=n+1-(HSYNC+BLACK+WHITE);
+  if(start<this.windowEpoch||start-this.lastShapeH<18)return;
+  // Once locked, look near the predicted line boundary. A false H in image
+  // content must not tug the horizontal oscillator across the screen.
+  if(this.hLocked && Math.abs(start-this.lineStart)>22 && this.hMissStreak<10)return;
+  const a=this.stat(start,start+HSYNC),b=this.stat(start+HSYNC,start+HSYNC+BLACK);
+  const c=this.stat(start+HSYNC+BLACK,start+HSYNC+BLACK+WHITE);
+  if(!a||!b||!c||a.n<17||b.n<8||c.n<8)return;
+  const d1=b.mean-a.mean,d2=c.mean-b.mean,span=c.mean-a.mean;
+  if(span<12||d1<Math.max(2,span*.08)||d2<Math.max(3,span*.20))return;
+  if(!this.autoThreshold&&a.mean>=this.threshold)return;
+  // Flatness is normalized to the RECEIVED amplitude. Absolute standard-
+  // deviation thresholds made low-gain signals latch one or two samples early.
+  if(a.sd>span*.24||b.sd>span*.24||c.sd>span*.24)return;
+  const score=(a.sd*a.sd*a.n+b.sd*b.sd*b.n+c.sd*c.sd*c.n)/((a.n+b.n+c.n)*span*span);
+  if(score>.04)return;
+  // Choose the best local alignment, not the first passing window. Six samples
+  // still leave at least two samples before the first active pixel at offset56.
+  const prior=this.hShapeCandidate;
+  if(!prior)this.hShapeCandidate={start,score,a,b,c,until:n+6};
+  else if(score<prior.score-1e-12)this.hShapeCandidate={start,score,a,b,c,until:prior.until};
+ }
+ // V separator: 48 low, 12 porch, 48 low, 12 porch, 48 low.
+ // This distinctive waveform is also normalized by the RECEIVED analog
+ // contrast rather than the encoder's nominal PCM offset.
+ verticalScore(start){
+  if(start<this.windowEpoch||start+VSYNC>this.totalSamples)return -1;
+  let lows=[],porches=[];
+  for(const [lo,hi,isSync] of VSEGMENTS){
+   // Ignore transition edges (FIR ringing + 4-sample search phase).
+   const width=hi-lo, trim=isSync?5:3;
+   const s=this.stat(start+lo+trim,start+hi-trim);
+   if(!s||s.n<(width-2*trim)*.70)return -1;
+   (isSync?lows:porches).push(s);
+  }
+  const low=lows.reduce((sum,s)=>sum+s.mean,0)/3;
+  const porch=(porches[0].mean+porches[1].mean)*.5;
+  const contrast=porch-low;
+  if(contrast<12)return -1;
+  // A vertical sync marker is a FLAT pulse train, unlike random FM noise.
+  // This is a check on the reserved sync waveform only, not on image pixels.
+  if(lows.some(s=>s.sd>Math.max(2,contrast*.30)) ||
+     porches.some(s=>s.sd>Math.max(2,contrast*.35)))return -1;
+  // H and V have different pulse widths and need not retain identical sync-tip
+  // amplitudes after the real RF channel. Compare DC-invariant contrasts;
+  // do not veto a genuine V merely because a short H was attenuated more.
+  if(this.hLocked&&this.rxWhiteMean!==null&&this.rxBlackMean!==null&&
+     contrast<(this.rxWhiteMean-this.rxBlackMean)*1.05)return -1;
+  if(!this.autoThreshold&&low>=this.threshold)return -1;
+  if(lows.some(s=>Math.abs(s.mean-low)>Math.max(2,contrast*.40))||
+     porches.some(s=>Math.abs(s.mean-porch)>Math.max(2,contrast*.45)))return -1;
+  // Noise may make an individual 48-sample low segment uneven. Its mean
+  // can still be usable; do not treat the video luminance as valid/invalid.
+  return contrast-Math.abs(porches[0].mean-porches[1].mean)*.2;
+ }
+ detectVertical(n){
+  if((n&3)!==0)return;
+  if(this.vCandidate && n>=this.vCandidate.until){
+   const candidate=this.vCandidate;this.vCandidate=null;
+   if(candidate.start-this.lastVAt>this.p.fieldSamples*.65)this.onVertical(candidate.start,n);
+  }
+  if(n+1<VSYNC||n-this.lastVAt<this.p.fieldSamples*.65)return;
+  const start=n+1-VSYNC,score=this.verticalScore(start);
+  if(score>=12){
+   this.vCandidates++;
+   if(!this.vCandidate||score>this.vCandidate.score)this.vCandidate={start,score,until:n+20};
+  }
+ }
+ onVertical(start,n){
+  const wasHLocked=this.hLocked;
+  this.lastVAt=start;this.verticalSyncs++;this.anchored=true;this.hClockStarted=true;
+  if(this.row>this.p.rows.length*.70 && n-this.lastFrameAt>this.p.fieldSamples*.55)this.emitFrame(n);
+  this.row=0;this.lineStart=start+VBLANK;
+  this.y.fill(72);this.yValid.fill(0);
+  if(this.u){this.u.fill(128);this.v.fill(128);this.uValid.fill(0);this.vValid.fill(0);}
+  this.hMissStreak=0;this.lineSeq=0;this.hSeq=-1;
+  this.hAlternative=null;this.hShapeCandidate=null;this.hPhaseError=0;
+  this.lastHAt=-1e12;this.lastHLineLength=0;
+  // The V back porch is also an actual received black reference. It can
+  // re-establish the clamp after a large gain change while H was unavailable.
+  const lowStats=VSEGMENTS.filter(s=>s[2]).map(([lo,hi])=>this.stat(start+lo+5,start+hi-5));
+  const whiteStats=VSEGMENTS.filter(s=>!s[2]).map(([lo,hi])=>this.stat(start+lo+3,start+hi-3));
+  const black=this.stat(start+VSYNC+3,Math.min(this.totalSamples,start+VBLANK-3));
+  if(lowStats.every(Boolean)&&whiteStats.every(Boolean)&&black&&black.n>=6){
+   const low=lowStats.reduce((s,v)=>s+v.mean,0)/lowStats.length;
+   const white=whiteStats.reduce((s,v)=>s+v.mean,0)/whiteStats.length;
+   if(black.mean>low+(white-low)*.10&&black.mean<white-(white-low)*.20){
+    this.rxSyncMean=low;this.rxBlackMean=black.mean;this.rxWhiteMean=white;
+    this.markerContrast=black.mean-low;this.syncThresholdUsed=(low+black.mean)*.5;
+   }
+  }
+  if(wasHLocked)this.hStreak=Math.max(3,this.hStreak);
+ }
+ onHorizontal(start,n,run,syncMean,blackMean,whiteMean){
+  if(start>=this.lastVAt && start<this.lastVAt+VBLANK-10)return;
+  const prev=this.lastHAt,prevLen=this.lastHLineLength;
+  const length=this.p.rows[this.row].len;
+  // Outside the expected flyback window, require reserved-reference contrast
+  // continuity. Image plateaus can imitate H shape, but must not drag a held
+  // oscillator into active video. Near the predicted top, allow real gain/DC
+  // changes immediately instead of waiting a whole slow frame for V.
+  const predictedError=this.hClockStarted?start-this.lineStart:0;
+  if(this.rxSyncMean!==null&&this.rxBlackMean!==null&&this.rxWhiteMean!==null&&Math.abs(predictedError)>22){
+   const depth=blackMean-syncMean,whiteSpan=whiteMean-blackMean;
+   if(depth<Math.max(2,(this.rxBlackMean-this.rxSyncMean)*.35)||
+      whiteSpan<Math.max(3,(this.rxWhiteMean-this.rxBlackMean)*.65)){
+    this.falseH++;return;
+   }
+  }
+  if(prev>-1e11&&start-prev<.58*Math.min(length,prevLen)){this.falseH++;return;}
+  const delta=prev>-1e11?start-prev:0;
+  const plausible=prev<=-1e11||this.lineLengths.some(l=>Math.abs(delta-l)<Math.max(13,l*.012));
+  const skipped=prev>-1e11&&this.lineLengths.some(l=>Math.abs(delta-2*l)<23);
+  const first=!this.hClockStarted;
+  let err=first?0:start-this.lineStart,reacquired=false,periodObservation=null;
+  if(!first&&(!plausible&&!skipped||Math.abs(err)>(this.hLocked?22:55))){
+   const alt=this.hAlternative;
+   const candidateDelta=alt?start-alt.start:0;
+   const matching=this.lineLengths.find(l=>candidateDelta>0&&Math.abs(candidateDelta-l)<Math.max(13,l*.012));
+   const coherent=alt&&matching!==undefined;
+   const streak=coherent?alt.streak+1:1;
+   const observed=coherent?candidateDelta-matching-this.hHold:0;
+   this.hAlternative={start,streak,periodError:coherent?(alt.periodError*(streak-2)+observed)/(streak-1):0};
+   if(streak<3){this.falseH++;return;}
+   reacquired=true;periodObservation=this.hAlternative.periodError;
+  }
+  // No rejected candidate above can change the oscillator, row, calibration,
+  // or pixels. A coherent reacquisition deliberately releases the stale lastH.
+  this.hAlternative=null;
+  if(first){
+   this.hClockStarted=true;this.lineStart=start;this.row=0;this.lineSeq=0;
+   this.hSeq=-1;this.hStreak=0;this.autoPeriod=0;
+  }else if(reacquired){
+   this.hReacquired++;this.lineStart=start;err=0;this.hStreak=2;this.hLocked=false;
+   this.autoPeriod=clamp(periodObservation,-3,3);
+  }
+  this.horizontalSyncs++;this.lastHAt=start;this.lastHLineLength=length;
+  this.hStreak=plausible||reacquired?Math.min(255,this.hStreak+1):Math.max(1,this.hStreak);
+  this.hSeq=this.lineSeq;this.hMissStreak=0;
+  if(this.hStreak>=3)this.hLocked=true;
+  this.hPhaseError=err;
+  const gain=this.hLocked?this.hLock:.65;
+  this.lineStart+=clamp(err*gain,-38,38);
+  if(!reacquired&&prev>-1e11 && plausible && delta>0){
+   this.autoPeriod=clamp(.97*this.autoPeriod+.03*(delta-prevLen-this.hHold),-3,3);
+  }
+  // A line clamp follows the received back porch, not an old multi-line DC
+  // average. Smooth only gain/contrast; available image samples remain intact.
+  if(this.rxBlackMean===null){
+   this.rxSyncMean=syncMean;this.rxBlackMean=blackMean;this.rxWhiteMean=whiteMean;
+  }else{
+   const oldSpan=this.rxWhiteMean-this.rxBlackMean,newSpan=whiteMean-blackMean;
+   const oldDepth=this.rxBlackMean-this.rxSyncMean,newDepth=blackMean-syncMean;
+   const gainAlpha=newSpan<oldSpan*.70||newSpan>oldSpan*1.45?.75:.10;
+   const span=oldSpan*(1-gainAlpha)+newSpan*gainAlpha;
+   const depth=oldDepth*.85+newDepth*.15;
+   this.rxBlackMean=blackMean;this.rxWhiteMean=blackMean+span;this.rxSyncMean=blackMean-depth;
+  }
+  this.markerContrast=this.rxBlackMean-this.rxSyncMean;
+  this.syncThresholdUsed=(this.rxSyncMean+this.rxBlackMean)*.5;
+ }
+ feed(value,missingSource='firmware'){
+  const n=this.totalSamples++,missing=value===-128;
+  if(missing){
+   this.totalMissing++;
+   if(missingSource==='gap')this.gapSamples++;
+   else this.invalidSamples++;
+  }
+  if(!missing){this.sumSoFar+=value;this.squareSoFar+=value*value;this.validSoFar++;}
+  const at=(n+1)&1023;
+  this.cumSum[at]=this.sumSoFar;this.cumSquare[at]=this.squareSoFar;this.cumValid[at]=this.validSoFar;
+  this.advanceRaster(n);
+  this.finishHorizontalCandidate(n);
+  if(!missing){this.detectHorizontal(n);this.detectVertical(n);}
+  this.advanceRaster(n);
+  const row=this.p.rows[this.row],rel=n-this.lineStart-PIXEL_OFFSET;
+  const position=Math.round(rel);
+  if(position>=0&&position<row.width*row.spp){
+   const x=this.shiftedX(Math.floor(position/row.spp),row);
+   if(row.spp===1){
+    if(missing)this.markMissing(x,this.row);
+    else this.paint(x,this.row,this.level(value));
+   }else if((position%row.spp)===0){
+    this.previousSampleValid=!missing;
+    if(!missing)this.previousSample=this.level(value);
+    else this.markMissing(x,this.row);
+   }else if(missing||!this.previousSampleValid){
+    this.markMissing(x,this.row);
+   }else this.paint(x,this.row,Math.round((this.previousSample+this.level(value))*.5));
+  }
+  this.advanceRaster(n+1);
+ }
+ feedBytes(bytes){for(let i=0;i<bytes.length;i++)this.feed(bytes[i]===128?-128:(bytes[i]<<24)>>24,'firmware');}
+ feedMissing(n){for(let k=0;k<n;k++)this.feed(-128,'gap');}
+ skipMissing(n){
+  if(n<=0)return;
+  // Advance the analog timebase through absent MPX3 samples.
+  // Unknown video positions are marked RED, never replaced by random data.
+  if(n>this.p.fieldSamples*2){
+   this.totalSamples+=n;this.totalMissing+=n;this.gapSamples+=n;
+   this.anchored=false;this.hLocked=false;this.hStreak=0;this.hClockStarted=false;
+   this.lineStart=this.totalSamples+VBLANK;this.row=0;this.lineSeq=0;this.hSeq=-1;
+   this.lowRun=0;this.lowSum=0;this.vCandidate=null;this.hCandidate=null;
+   this.resetWaveWindow();
+   this.showSignalLoss('Large serial timeline gap');return;
+  }
+  const end=this.totalSamples+n;
+  let loops=0;
+  while(this.totalSamples<end && loops++<this.p.rows.length*3+10){
+   this.advanceRaster(this.totalSamples);
+   const lineEnd=this.lineStart+this.currentPeriod();
+   const segmentEnd=Math.min(end,Math.max(this.totalSamples+1,lineEnd));
+   const row=this.p.rows[this.row],a=this.totalSamples,b=segmentEnd;
+   const low=Math.max(0,Math.ceil((a-this.lineStart-PIXEL_OFFSET)/row.spp));
+   const high=Math.min(row.width,Math.ceil((b-this.lineStart-PIXEL_OFFSET)/row.spp));
+   for(let x=low;x<high;x++)this.markMissing(this.shiftedX(x,row),this.row);
+   this.totalMissing+=b-a;this.gapSamples+=b-a;this.totalSamples=b;
+   this.advanceRaster(this.totalSamples);
+  }
+  if(this.totalSamples<end){
+   this.totalMissing+=end-this.totalSamples;this.gapSamples+=end-this.totalSamples;
+   this.totalSamples=end;this.showSignalLoss('Serial sample timeline interrupted');
+  }
+  // A gap can wipe out the current sync pattern. Keep the raster moving, then
+  // let the next legitimate H/V markers establish the new phase.
+  this.lowRun=0;this.lowSum=0;this.hCandidate=null;this.vCandidate=null;
+  this.resetWaveWindow();
+  // The clock survives short serial gaps. A full missed line or two will
+  // be corrected by the next H; V can always realign the vertical origin.
+  this.hAlternative=null;
+ }
+ showSignalLoss(reason='No PCM samples arriving'){
+  // UI state only. No fictitious PCM sample is fed to the video decoder.
+  const picture=new Uint8ClampedArray(this.m.w*this.m.h*4);
+  for(let j=0;j<picture.length;j+=4){picture[j]=255;picture[j+1]=0;picture[j+2]=0;picture[j+3]=255;}
+  this.redPixelsLast=this.m.w*this.m.h;
+  this.onFrame(picture,{redPixels:this.redPixelsLast,totalPixels:this.redPixelsLast,
+    invalidSamples:this.invalidSamples,gapSamples:this.gapSamples,
+    missingSamples:this.totalMissing,signalLoss:reason});
+ }
+}
+root.CBAnalogV8=Object.freeze({FS,HSYNC,VSYNC,VPORCH,VBLANK,HOVER,VSEGMENTS,formats,getFormat,getPlan,plan,patternRGBA,sourceFromRGBA,makeWave,Decoder});
+root.CBAnalogV7=root.CBAnalogV8; // test harness compatibility
+})(typeof globalThis!=='undefined'?globalThis:this);
+
+
+;
+/* CB DATA v1: bytes are carried by visible raster symbols, never by a UART side channel.
+ * Dependency-free browser/Node codec. CRC detects accidental corruption; it is not authentication.
+ */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.CBDataV1 = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+  const SHARD_BYTES = 36, PACKET_BYTES = 56, FRAME_BYTES = 80, MAX_K = 24;
+  const VERSION = 1, DATA = 0, META = 1, END = 2;
+  const PILOT = Uint8Array.from([0xd3,0x91,0xa6,0x5c,0x6e,0x2b,0x49,0xb5,0x25,0xda,0x96,0x4b,0xb9,0x64,0x3a,0xc7]);
+  const EXP = new Uint8Array(512), LOG = new Uint8Array(256);
+  let x = 1;
+  for (let i = 0; i < 255; i++) { EXP[i] = x; LOG[x] = i; x <<= 1; if (x & 256) x ^= 0x11d; }
+  for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
+  const mul = (a,b) => a && b ? EXP[LOG[a] + LOG[b]] : 0;
+  const div = (a,b) => { if (!b) throw new Error('GF division by zero'); return a ? EXP[(LOG[a] - LOG[b] + 255) % 255] : 0; };
+  const pow = (a,n) => n === 0 ? 1 : a ? EXP[(LOG[a] * n) % 255] : 0;
+  const polyMul = (a,b) => { const c = new Uint8Array(a.length+b.length-1); for(let i=0;i<a.length;i++) for(let j=0;j<b.length;j++) c[i+j]^=mul(a[i],b[j]); return c; };
+  const evalDesc = (a,v) => { let r=0; for(let i=0;i<a.length;i++) r=mul(r,v)^a[i]; return r; };
+  const evalAsc = (a,v) => { let r=0; for(let i=a.length-1;i>=0;i--) r=mul(r,v)^a[i]; return r; };
+  function bytes(a, length, name) {
+    if (!(a instanceof Uint8Array) && !(a instanceof Uint8ClampedArray)) throw new TypeError((name||'bytes')+' must be a Uint8Array');
+    if (length !== undefined && a.length !== length) throw new RangeError((name||'bytes')+' length');
+    return a;
+  }
+  function integer(a, min, max, name) {
+    if (!Number.isSafeInteger(a) || a < min || a > max) throw new RangeError(name||'integer');
+    return a;
+  }
+  function generation64(a) {
+    if (typeof a === 'number') { integer(a,0,Number.MAX_SAFE_INTEGER,'generation'); a=BigInt(a); }
+    if (typeof a !== 'bigint' || a<0n || a>0xffffffffffffffffn) throw new RangeError('generation uint64');
+    return a;
+  }
+  const sameGeneration = (a,b) => generation64(a) === generation64(b);
+  function put32(a,p,v) { a[p]=v>>>24; a[p+1]=v>>>16; a[p+2]=v>>>8; a[p+3]=v; }
+  function get32(a,p) { return ((a[p]*0x1000000)+(a[p+1]<<16)+(a[p+2]<<8)+a[p+3])>>>0; }
+  function put64(a,p,v) { v=generation64(v); for(let i=7;i>=0;i--) { a[p+i]=Number(v&255n); v>>=8n; } }
+  function get64(a,p) { let v=0n; for(let i=0;i<8;i++) v=(v<<8n)|BigInt(a[p+i]); return v<=BigInt(Number.MAX_SAFE_INTEGER)?Number(v):v; }
+  const CRC_TABLE = new Uint32Array(256);
+  for(let i=0;i<256;i++) { let c=i; for(let j=0;j<8;j++) c=(c>>>1)^((c&1)?0x82f63b78:0); CRC_TABLE[i]=c>>>0; }
+  function crc32c(a) { bytes(a); let c=0xffffffff; for(let i=0;i<a.length;i++) c=CRC_TABLE[(c^a[i])&255]^(c>>>8); return (c^0xffffffff)>>>0; }
+
+  // Shortened systematic RS(80,56), roots alpha^0 ... alpha^23 in GF(256), primitive 0x11d.
+  let INNER_GEN = Uint8Array.of(1);
+  for(let i=0;i<24;i++) INNER_GEN=polyMul(INNER_GEN,Uint8Array.of(1,EXP[i]));
+  function innerEncode(data) {
+    bytes(data,PACKET_BYTES); const out=new Uint8Array(FRAME_BYTES); out.set(data);
+    for(let i=0;i<PACKET_BYTES;i++) { const c=out[i]; if(c) for(let j=1;j<INNER_GEN.length;j++) out[i+j]^=mul(INNER_GEN[j],c); }
+    out.set(data); return out;
+  }
+  function solve(matrix, rhs) {
+    const n=matrix.length, a=matrix.map((row,i)=>{ const r=new Uint8Array(n+1); r.set(row); r[n]=rhs[i]; return r; });
+    for(let col=0;col<n;col++) {
+      let p=col; while(p<n&&!a[p][col]) p++; if(p===n) throw new Error('Singular GF matrix');
+      if(p!==col) [a[p],a[col]]=[a[col],a[p]];
+      const inv=div(1,a[col][col]); for(let j=col;j<=n;j++) a[col][j]=mul(a[col][j],inv);
+      for(let i=0;i<n;i++) if(i!==col&&a[i][col]) { const c=a[i][col]; for(let j=col;j<=n;j++) a[i][j]^=mul(c,a[col][j]); }
+    }
+    return Uint8Array.from(a,r=>r[n]);
+  }
+  function invert(matrix) {
+    const n=matrix.length, a=matrix.map((row,i)=>{const r=new Uint8Array(2*n);r.set(row);r[n+i]=1;return r;});
+    for(let col=0;col<n;col++) {
+      let p=col; while(p<n&&!a[p][col]) p++; if(p===n) throw new Error('Singular GF matrix');
+      if(p!==col) [a[p],a[col]]=[a[col],a[p]];
+      const inv=div(1,a[col][col]); for(let j=0;j<2*n;j++) a[col][j]=mul(a[col][j],inv);
+      for(let i=0;i<n;i++) if(i!==col&&a[i][col]) { const c=a[i][col]; for(let j=0;j<2*n;j++) a[i][j]^=mul(c,a[col][j]); }
+    }
+    return a.map(r=>r.slice(n));
+  }
+  function berlekamp(s) {
+    let c=[1], b=[1], l=0, m=1, previous=1;
+    for(let n=0;n<s.length;n++) {
+      let d=s[n]; for(let i=1;i<=l;i++) d^=mul(c[i]||0,s[n-i]);
+      if(!d) { m++; continue; }
+      const old=c.slice(), factor=div(d,previous);
+      while(c.length<b.length+m) c.push(0);
+      for(let i=0;i<b.length;i++) c[i+m]^=mul(factor,b[i]);
+      if(2*l<=n) { l=n+1-l; b=old; previous=d; m=1; } else m++;
+    }
+    while(c.length>1&&!c[c.length-1]) c.pop();
+    return c;
+  }
+  function innerDecode(frame, erasures) {
+    bytes(frame,FRAME_BYTES);
+    const known=Array.from(new Set(erasures||[]));
+    if(known.length>24 || known.some(p=>!Number.isInteger(p)||p<0||p>=80)) return null;
+    const out=Uint8Array.from(frame), s=Uint8Array.from({length:24},(_,i)=>evalDesc(out,EXP[i]));
+    if(!s.some(Boolean)) return {data:out.slice(0,56), corrected:0, erasures:known.length};
+    let locator=Uint8Array.of(1);
+    for(const p of known) locator=polyMul(locator,Uint8Array.of(1,EXP[79-p]));
+    const modified=[];
+    for(let n=known.length;n<24;n++) { let v=0; for(let i=0;i<locator.length;i++) v^=mul(locator[i],s[n-i]); modified.push(v); }
+    const unknown=berlekamp(modified), unknownCount=unknown.length-1;
+    if(2*unknownCount+known.length>24) return null;
+    locator=polyMul(locator,unknown);
+    const positions=[];
+    for(let p=0;p<80;p++) if(!evalAsc(locator,EXP[(255-(79-p))%255])) positions.push(p);
+    if(positions.length!==locator.length-1 || !positions.length) return null;
+    try {
+      const matrix=positions.map((_,i)=>Uint8Array.from(positions,p=>pow(EXP[79-p],i)));
+      const values=solve(matrix,s.slice(0,positions.length));
+      let corrected=0;
+      for(let i=0;i<positions.length;i++) { out[positions[i]]^=values[i]; if(values[i]) corrected++; }
+      for(let i=0;i<24;i++) if(evalDesc(out,EXP[i])) return null;
+      return {data:out.slice(0,56),corrected,erasures:known.length};
+    } catch (_) { return null; }
+  }
+  function validatePacket(p) {
+    integer(p.type===undefined?DATA:p.type,DATA,END,'packet type');
+    integer(p.transferId,0,0xffffffff,'transferId'); generation64(p.generation);
+    integer(p.k,1,MAX_K,'k'); integer(p.n,p.k,Math.min(255,9*p.k),'n'); integer(p.index,0,p.n-1,'index');
+    bytes(p.payload,SHARD_BYTES,'payload');
+  }
+  function encodeFrame(p) {
+    validatePacket(p); const a=new Uint8Array(56);
+    a[0]=(VERSION<<4)|(p.type||0); a[1]=p.k; a[2]=p.n; a[3]=p.index;
+    put32(a,4,p.transferId); put64(a,8,p.generation); a.set(p.payload,16); put32(a,52,crc32c(a.subarray(0,52)));
+    return innerEncode(a);
+  }
+  function decodeFrame(frame, erasures) {
+    const result=innerDecode(frame,erasures); if(!result) return null; const a=result.data;
+    if((a[0]>>>4)!==VERSION || (a[0]&15)>END || get32(a,52)!==crc32c(a.subarray(0,52))) return null;
+    const p={type:a[0]&15,k:a[1],n:a[2],index:a[3],transferId:get32(a,4),generation:get64(a,8),payload:a.slice(16,52),corrected:result.corrected,erasures:result.erasures};
+    try { validatePacket(p); return p; } catch (_) { return null; }
+  }
+  const coefficientCache=new Map();
+  function coefficients(k) {
+    if(coefficientCache.has(k)) return coefficientCache.get(k);
+    const top=Array.from({length:k},(_,r)=>Uint8Array.from({length:k},(_,c)=>pow(r+1,c)));
+    const inverse=invert(top), rows=[];
+    for(let r=0;r<9*k;r++) {
+      const row=new Uint8Array(k);
+      if(r<k) row[r]=1;
+      else for(let c=0;c<k;c++) for(let j=0;j<k;j++) row[c]^=mul(pow(r+1,j),inverse[j][c]);
+      rows.push(row);
+    }
+    if(coefficientCache.size>=4) coefficientCache.delete(coefficientCache.keys().next().value);
+    coefficientCache.set(k,rows); return rows;
+  }
+  function encodeGeneration(input, options) {
+    bytes(input); const o=options||{};
+    const k=integer(o.k===undefined?Math.max(1,Math.ceil(input.length/36)):o.k,1,MAX_K,'k');
+    if(input.length>k*36) throw new RangeError('One generation holds at most k*36 bytes');
+    const redundancy=o.redundancy===undefined?0:o.redundancy;
+    if(typeof redundancy!=='number'||!Number.isFinite(redundancy)||redundancy<0||redundancy>800) throw new RangeError('redundancy must be 0..800 percent');
+    const n=k+Math.ceil(k*redundancy/100), source=new Uint8Array(k*36); source.set(input);
+    const rows=coefficients(k), frames=[];
+    for(let r=0;r<n;r++) {
+      const payload=new Uint8Array(36);
+      for(let c=0;c<k;c++) if(rows[r][c]) for(let b=0;b<36;b++) payload[b]^=mul(rows[r][c],source[c*36+b]);
+      frames.push(encodeFrame({type:o.type===undefined?DATA:o.type,transferId:o.transferId,generation:o.generation,k,n,index:r,payload}));
+    }
+    return {k,n,byteLength:input.length,frames};
+  }
+  function recoverGeneration(packets) {
+    if(!Array.isArray(packets)||!packets.length) throw new RangeError('Packets required');
+    const first=packets[0]; validatePacket(first); const unique=new Map();
+    for(const p of packets) {
+      validatePacket(p);
+      if(p.transferId!==first.transferId || p.type!==first.type || !sameGeneration(p.generation,first.generation) || p.k!==first.k || p.n!==first.n) throw new Error('Mixed generations');
+      if(unique.has(p.index)) { const previous=unique.get(p.index); if(previous.payload.some((v,i)=>v!==p.payload[i])) throw new Error('Conflicting duplicate shard'); }
+      else unique.set(p.index,p);
+    }
+    if(unique.size<first.k) throw new RangeError('Not enough distinct shards');
+    const chosen=Array.from(unique.values()).slice(0,first.k), rows=coefficients(first.k);
+    const inverse=invert(chosen.map(p=>rows[p.index])), out=new Uint8Array(first.k*36);
+    for(let c=0;c<first.k;c++) for(let r=0;r<first.k;r++) if(inverse[c][r]) for(let b=0;b<36;b++) out[c*36+b]^=mul(inverse[c][r],chosen[r].payload[b]);
+    return out;
+  }
+  function layout(width,height) {
+    integer(width,64,8192,'width'); integer(height,48,8192,'height');
+    const columns=Math.floor(width/64), rows=Math.floor(height/48), tiles=[];
+    for(let r=0;r<rows;r++) for(let c=0;c<columns;c++) tiles.push({x:Math.floor(c*width/columns),y:Math.floor(r*height/rows),width:Math.floor((c+1)*width/columns)-Math.floor(c*width/columns),height:Math.floor((r+1)*height/rows)-Math.floor(r*height/rows)});
+    return {columns,rows,slots:tiles.length,tiles};
+  }
+  function cellBit(frame,row,col) {
+    if(row<2) return (PILOT[row*4+(col>>>3)]>>>(7-(col&7)))&1;
+    if(row>=22) return (PILOT[8+(row-22)*4+(col>>>3)]>>>(7-(col&7)))&1;
+    return (frame[(row-2)*4+(col>>>3)]>>>(7-(col&7)))&1;
+  }
+  function drawTile(out,width,tile,frame) {
+    bytes(frame,80);
+    for(let r=0;r<24;r++) for(let c=0;c<32;c++) {
+      const value=cellBit(frame,r,c)?240:16;
+      const x0=tile.x+Math.floor(c*tile.width/32),x1=tile.x+Math.floor((c+1)*tile.width/32);
+      const y0=tile.y+Math.floor(r*tile.height/24),y1=tile.y+Math.floor((r+1)*tile.height/24);
+      for(let y=y0;y<y1;y++) for(let x=x0;x<x1;x++) { const p=(y*width+x)*4; out[p]=out[p+1]=out[p+2]=value; out[p+3]=255; }
+    }
+  }
+  function imageBuffer(width,height) { const a=new Uint8ClampedArray(width*height*4); for(let p=3;p<a.length;p+=4) a[p]=255; return a; }
+  function renderImage(frames,width,height) {
+    const l=layout(width,height); if(!Array.isArray(frames)||frames.length>l.slots) throw new RangeError('Too many frames for image slots');
+    const out=imageBuffer(width,height); frames.forEach((f,i)=>drawTile(out,width,l.tiles[i],f)); return out;
+  }
+  function renderFrame(frame,width,height) { layout(width,height); const out=imageBuffer(width,height); drawTile(out,width,{x:0,y:0,width,height},frame); return out; }
+  function sampleTile(rgba,width,height,tile,dx,dy,valid,luma) {
+    const values=new Float64Array(768), coverage=new Float64Array(768);
+    for(let r=0;r<24;r++) for(let c=0;c<32;c++) {
+      const x0=tile.x+Math.floor(c*tile.width/32),x1=tile.x+Math.floor((c+1)*tile.width/32);
+      const y0=tile.y+Math.floor(r*tile.height/24),y1=tile.y+Math.floor((r+1)*tile.height/24);
+      let sum=0,count=0,total=0;
+      // Central half of a module; at the minimum size both physical pixels are sampled.
+      const xa=Math.ceil(x0+(x1-x0)*0.25-0.5),xb=Math.floor(x0+(x1-x0)*0.75-0.5);
+      const ya=Math.ceil(y0+(y1-y0)*0.25-0.5),yb=Math.floor(y0+(y1-y0)*0.75-0.5);
+      for(let y=ya;y<=yb;y++) for(let x=xa;x<=xb;x++) {
+        total++; const xx=x+dx,yy=y+dy;
+        if(xx<0||xx>=width||yy<0||yy>=height) continue;
+        const p=yy*width+xx; if(valid&&!valid[p]) continue;
+        const q=p*4; sum+=luma?luma[p]:rgba[q]*0.299+rgba[q+1]*0.587+rgba[q+2]*0.114; count++;
+      }
+      const i=r*32+c; values[i]=count?sum/count:NaN; coverage[i]=total?count/total:0;
+    }
+    let low=0,high=0,nLow=0,nHigh=0;
+    for(let r=0;r<24;r++) if(r<2||r>=22) for(let c=0;c<32;c++) {
+      const v=values[r*32+c]; if(!Number.isFinite(v)) continue;
+      if(cellBit(null,r,c)) { high+=v;nHigh++; } else { low+=v;nLow++; }
+    }
+    if(nLow<32||nHigh<32) return null;
+    low/=nLow; high/=nHigh; const contrast=high-low;
+    if(contrast<16) return null;
+    const threshold=(low+high)/2; let errors=0,score=0;
+    for(let r=0;r<24;r++) if(r<2||r>=22) for(let c=0;c<32;c++) {
+      const v=values[r*32+c],expected=cellBit(null,r,c);
+      if(!Number.isFinite(v)||(v>=threshold?1:0)!==expected) errors++;
+      else score+=Math.min(1,Math.abs(v-threshold)/(contrast/2));
+    }
+    if(errors>32) return null;
+    return {values,coverage,threshold,contrast,errors,score:score-errors*2,dx,dy};
+  }
+  function extractCandidate(s) {
+    const frame=new Uint8Array(80), erased=[];
+    for(let r=2;r<22;r++) for(let c=0;c<32;c++) {
+      const i=r*32+c,b=(r-2)*4+(c>>>3),v=s.values[i];
+      if(v>=s.threshold) frame[b]|=1<<(7-(c&7));
+      if(!Number.isFinite(v)||s.coverage[i]<0.5||Math.abs(v-s.threshold)<s.contrast*0.09) erased.push(b);
+    }
+    const erasures=Array.from(new Set(erased));
+    // Hard decisions can outperform confidence erasures when more than 24 bytes are uncertain.
+    let p=decodeFrame(frame);
+    if(!p&&erasures.length&&erasures.length<=24) p=decodeFrame(frame,erasures);
+    return p;
+  }
+  function readTile(rgba,width,height,tile,options) {
+    const maxShift=integer(options.maxShift===undefined?1:options.maxShift,0,2,'maxShift'), candidates=[];
+    for(let dy=-maxShift;dy<=maxShift;dy++) for(let dx=-maxShift;dx<=maxShift;dx++) {
+      const s=sampleTile(rgba,width,height,tile,dx,dy,options.valid,options.luma); if(s) candidates.push(s);
+    }
+    candidates.sort((a,b)=>b.score-a.score || (Math.abs(a.dx)+Math.abs(a.dy))-(Math.abs(b.dx)+Math.abs(b.dy)));
+    for(const s of candidates) { const p=extractCandidate(s); if(p) { p.image={dx:s.dx,dy:s.dy,pilotErrors:s.errors,contrast:s.contrast}; return p; } }
+    return null;
+  }
+  function validateImage(rgba,width,height,options) {
+    if(options.luma) bytes(options.luma,width*height,'luma');
+    if(rgba!==null&&rgba!==undefined) bytes(rgba,width*height*4,'RGBA');
+    else if(!options.luma) throw new TypeError('RGBA or luma required');
+    if(options.valid) bytes(options.valid,width*height,'valid bitmap');
+  }
+  function decodeImage(rgba,width,height,options) {
+    const l=layout(width,height),o=options instanceof Uint8Array?{valid:options}:options||{}; validateImage(rgba,width,height,o);
+    const packets=[];
+    l.tiles.forEach((t,i)=>{const p=readTile(rgba,width,height,t,o);if(p){p.slot=i;packets.push(p);}}); return packets;
+  }
+  function decodeSingleImage(rgba,width,height,options) {
+    layout(width,height); const o=options instanceof Uint8Array?{valid:options}:options||{}; validateImage(rgba,width,height,o);
+    return readTile(rgba,width,height,{x:0,y:0,width,height},o);
+  }
+  return Object.freeze({VERSION,DATA,META,END,SHARD_BYTES,PACKET_BYTES,FRAME_BYTES,MAX_K,GRID_WIDTH:32,GRID_HEIGHT:24,
+    crc32c,encodeFrame,decodeFrame,encodeGeneration,recoverGeneration,layout,renderImage,decodeImage,renderFrame,decodeSingleImage});
+});
+
+;
+/* CB-DATA streaming file layer. No radio/serial access, no whole-file buffers. */
+(function(root){
+'use strict';
+const BLOCK=864,MAX_META=65536,WINDOW=16;
+const now=()=>Date.now();
+const encoder=new TextEncoder(),decoder=new TextDecoder('utf-8',{fatal:true});
+const hex=bytes=>Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
+const safeName=name=>String(name||'received.bin').replace(/[\\/\x00-\x1f\x7f]/g,'_').slice(0,2048)||'received.bin';
+class SHA256{
+ constructor(){this.h=new Uint32Array([0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19]);this.buffer=new Uint8Array(64);this.used=0;this.bytes=0;this.done=false;this.w=new Uint32Array(64);}
+ update(data){
+  if(this.done)throw Error('SHA256 already finalized');
+  if(!Number.isSafeInteger(this.bytes+data.length))throw Error('File exceeds exact browser integer range');
+  this.bytes+=data.length;let p=0;
+  if(this.used){const take=Math.min(64-this.used,data.length);this.buffer.set(data.subarray(0,take),this.used);this.used+=take;p+=take;if(this.used===64){this.block(this.buffer,0);this.used=0;}}
+  while(p+64<=data.length){this.block(data,p);p+=64;}
+  if(p<data.length){this.buffer.set(data.subarray(p),0);this.used=data.length-p;}
+  return this;
+ }
+ block(data,p){
+  const w=this.w,R=(x,n)=>(x>>>n)|(x<<(32-n));
+  for(let i=0;i<16;i++){const j=p+i*4;w[i]=((data[j]<<24)|(data[j+1]<<16)|(data[j+2]<<8)|data[j+3])>>>0;}
+  for(let i=16;i<64;i++){const a=w[i-15],b=w[i-2];w[i]=(w[i-16]+(R(a,7)^R(a,18)^(a>>>3))+w[i-7]+(R(b,17)^R(b,19)^(b>>>10)))>>>0;}
+  let [a,b,c,d,e,f,g,h]=this.h;
+  for(let i=0;i<64;i++){const t1=(h+(R(e,6)^R(e,11)^R(e,25))+((e&f)^(~e&g))+SHA256.K[i]+w[i])>>>0,t2=((R(a,2)^R(a,13)^R(a,22))+((a&b)^(a&c)^(b&c)))>>>0;h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;}
+  for(const [i,v] of [a,b,c,d,e,f,g,h].entries())this.h[i]=(this.h[i]+v)>>>0;
+ }
+ digest(){
+  if(this.done)throw Error('SHA256 already finalized');
+  const bytes=this.bytes;this.buffer[this.used++]=128;
+  if(this.used>56){this.buffer.fill(0,this.used);this.block(this.buffer,0);this.used=0;}
+  this.buffer.fill(0,this.used,56);
+  const v=new DataView(this.buffer.buffer);v.setUint32(56,Math.floor(bytes/0x20000000),false);v.setUint32(60,(bytes*8)>>>0,false);
+  this.block(this.buffer,0);this.done=true;
+  const out=new Uint8Array(32),view=new DataView(out.buffer);for(let i=0;i<8;i++)view.setUint32(i*4,this.h[i],false);return out;
+ }
+ hex(){return hex(this.digest());}
+}
+SHA256.K=new Uint32Array([0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);
+async function hashFile(file,onProgress=()=>{},cancelled=()=>false){
+ if(!Number.isSafeInteger(file.size)||file.size<0)throw Error('Unsupported file size');
+ const hash=new SHA256();
+ for(let offset=0;offset<file.size;offset+=1048576){
+  if(cancelled())throw Error('Preparation cancelled');
+  const end=Math.min(file.size,offset+1048576),chunk=new Uint8Array(await file.slice(offset,end).arrayBuffer());
+  if(chunk.length!==end-offset)throw Error('Source file changed or read was incomplete');
+  hash.update(chunk);
+  onProgress(Math.min(file.size,offset+1048576),file.size);await new Promise(r=>setTimeout(r,0));
+ }
+ return hash.hex();
+}
+function validateManifest(m){
+ if(!m||m.protocol!=='CB-DATA-1'||!Number.isInteger(m.transferId)||m.transferId<0||m.transferId>0xffffffff||!Number.isSafeInteger(m.size)||m.size<0||m.generationBytes!==BLOCK||typeof m.name!=='string'||m.name.length>2048||typeof m.sha256!=='string'||!(/^[0-9a-f]{64}$/).test(m.sha256)||!Number.isFinite(m.fecPercent)||m.fecPercent<0||m.fecPercent>800)throw Error('Invalid DATA manifest');
+ return {...m,name:safeName(m.name)};
+}
+// These three adapters isolate the packet API from storage and browser code.
+function generation(core,bytes,options){return core.encodeGeneration(bytes,{...options,redundancy:options.fecPercent}).frames;}
+function recover(core,packets){return core.recoverGeneration(packets);}
+function normalize(packet){return packet;}
+class Sender{
+ constructor(core,file,manifest,{passes=0,onProgress=()=>{}}={}){
+  this.core=core;this.file=file;this.manifest=validateManifest(manifest);this.passes=passes;this.onProgress=onProgress;
+  if(!file||!Number.isSafeInteger(file.size)||file.size<0||file.size!==this.manifest.size||typeof file.slice!=='function')throw Error('Source size does not match manifest');
+  if(!Number.isInteger(passes)||passes<0)throw Error('Invalid pass count');
+  const json=encoder.encode(JSON.stringify(this.manifest));if(json.length+4>MAX_META)throw Error('Metadata too long');
+  const envelope=new Uint8Array(json.length+4);new DataView(envelope.buffer).setUint32(0,json.length,true);envelope.set(json,4);
+  this.metaPackets=[];for(let start=0,g=0;start<envelope.length;start+=BLOCK,g++)this.metaPackets.push(...this.encode(envelope.subarray(start,start+BLOCK),1,g));
+  this.pass=0;this.done=false;this.cache=null;this.cacheAt=0;this.generated=0;this.resetPass();
+ }
+ encode(bytes,type,generationIndex){return generation(this.core,bytes,{type,transferId:this.manifest.transferId,generation:generationIndex,fecPercent:this.manifest.fecPercent});}
+ resetPass(){this.pass++;this.metaCursor=0;this.initialMeta=true;this.interleave=0;this.generationIndex=0;this.dataPackets=[];this.dataAt=0;this.endSent=false;this.cache=null;this.onProgress(this.progress());}
+ progress(){return {pass:this.pass,passes:this.passes,sourceBytesPrepared:Math.min(this.file.size,this.generationIndex*BLOCK),size:this.file.size,packetsPrepared:this.generated,done:this.done};}
+ async read(offset,length){
+  if(!this.cache||offset<this.cacheAt||offset+length>this.cacheAt+this.cache.length){this.cacheAt=offset;this.cache=new Uint8Array(await this.file.slice(offset,Math.min(this.file.size,offset+262144)).arrayBuffer());}
+  const bytes=this.cache.subarray(offset-this.cacheAt,offset-this.cacheAt+length);if(bytes.length!==length)throw Error('Source file changed or read was incomplete');return bytes;
+ }
+ async nextPacket(){
+  if(this.done)return null;
+  if(this.initialMeta){const packet=this.metaPackets[this.metaCursor++];if(this.metaCursor>=this.metaPackets.length){this.initialMeta=false;this.metaCursor=0;}this.generated++;return packet;}
+  if(this.interleave>=8){this.interleave=0;this.generated++;const p=this.metaPackets[this.metaCursor++];this.metaCursor%=this.metaPackets.length;return p;}
+  if(this.dataAt>=this.dataPackets.length){
+   const offset=this.generationIndex*BLOCK;
+   if(offset<this.file.size){const bytes=await this.read(offset,Math.min(BLOCK,this.file.size-offset));this.dataPackets=this.encode(bytes,0,this.generationIndex++);this.dataAt=0;this.onProgress(this.progress());}
+   else if(!this.endSent){this.dataPackets=this.encode(new Uint8Array(36),2,0);this.dataAt=0;this.endSent=true;}
+   else{if(this.passes&&this.pass>=this.passes){this.done=true;this.onProgress(this.progress());return null;}this.resetPass();return this.nextPacket();}
+  }
+  this.interleave++;this.generated++;return this.dataPackets[this.dataAt++];
+ }
+ async nextPackets(count){const out=[];for(let i=0;i<count;i++){const p=await this.nextPacket();if(!p)break;out.push(p);}return out;}
+}
+class Receiver{
+ constructor(core,{open,onProgress=()=>{},onManifest=()=>{},onComplete=()=>{},onError=()=>{},window=WINDOW}={}){
+  if(typeof open!=='function')throw Error('A streaming destination is required');
+  if(!Number.isInteger(window)||window<1||window>64)throw Error('Receive window must be 1..64 generations');
+  this.core=core;this.open=open;this.onProgress=onProgress;this.onManifest=onManifest;this.onComplete=onComplete;this.onError=onError;
+  this.window=window;this.entries=new Map();this.recovered=new Map();this.metaEntries=new Map();this.metaBlocks=new Map();
+  this.state='waiting';this.manifest=null;this.candidateId=null;this.writer=null;this.nextGeneration=0;this.bytesWritten=0;this.hash=new SHA256();
+  this.pending=0;this.chain=Promise.resolve();this.closed=false;this.stats={packets:0,duplicates:0,foreign:0,outsideWindow:0,busyDropped:0,recoveredGenerations:0};this.started=now();
+ }
+ enqueue(packets){
+  for(const p of packets){if(this.closed)break;if(!Number.isSafeInteger(p.generation)||p.generation<0){this.stats.foreign++;continue;}if(this.pending>=512){this.stats.busyDropped++;continue;}this.pending++;this.chain=this.chain.then(()=>this.accept(normalize(p))).catch(e=>this.fail(e)).finally(()=>this.pending--);}
+  return this.chain;
+ }
+ progress(){return {state:this.state,manifest:this.manifest,bytesWritten:this.bytesWritten,nextGeneration:this.nextGeneration,pending:this.pending,activeGenerations:this.entries.size,recoveredBuffered:this.recovered.size,...this.stats,elapsedSeconds:(now()-this.started)/1000};}
+ collect(map,p){
+  const key=p.generation;let entry=map.get(key);
+  if(!entry){entry={k:p.k,n:p.n,shards:new Map()};map.set(key,entry);}
+  if(entry.k!==p.k||entry.n!==p.n)return null;
+  if(entry.shards.has(p.index)){this.stats.duplicates++;return null;}
+  entry.shards.set(p.index,p);
+  if(entry.shards.size<p.k)return null;
+  const bytes=recover(this.core,[...entry.shards.values()]);map.delete(key);return bytes;
+ }
+ async accept(p){
+  if(this.closed||this.state==='complete'||this.state==='error')return;
+  this.stats.packets++;
+  if(p.type===1){await this.metadata(p);return;}
+  if(!this.manifest||p.transferId!==this.manifest.transferId){this.stats.foreign++;return;}
+  if(p.type!==0)return;
+  if(p.generation<this.nextGeneration){this.stats.duplicates++;return;}
+  if(p.generation>=this.nextGeneration+this.window){this.stats.outsideWindow++;return;}
+  const total=Math.ceil(this.manifest.size/BLOCK);
+  if(p.generation>=total)return;
+  const expectedK=Math.ceil(Math.min(BLOCK,this.manifest.size-p.generation*BLOCK)/36);
+  if(p.k!==expectedK||this.recovered.has(p.generation))return;
+  const bytes=this.collect(this.entries,p);if(!bytes)return;
+  this.recovered.set(p.generation,bytes);this.stats.recoveredGenerations++;
+  while(this.recovered.has(this.nextGeneration)){
+   const bytes=this.recovered.get(this.nextGeneration),take=Math.min(BLOCK,this.manifest.size-this.bytesWritten);
+   await this.writer.write(bytes.subarray(0,take));if(this.closed)return;this.hash.update(bytes.subarray(0,take));this.bytesWritten+=take;this.recovered.delete(this.nextGeneration++);
+   this.onProgress(this.progress());
+  }
+  if(this.bytesWritten===this.manifest.size)await this.finish();
+ }
+ async metadata(p){
+  if(this.manifest){if(p.transferId!==this.manifest.transferId)this.stats.foreign++;return;}
+  if(this.candidateId===null)this.candidateId=p.transferId;
+  if(p.transferId!==this.candidateId||p.generation>=Math.ceil(MAX_META/BLOCK)){this.stats.foreign++;return;}
+  if(this.metaBlocks.has(p.generation))return;
+  const bytes=this.collect(this.metaEntries,p);if(!bytes)return;
+  this.metaBlocks.set(p.generation,bytes);
+  const first=this.metaBlocks.get(0);if(!first)return;
+  const length=new DataView(first.buffer,first.byteOffset,first.byteLength).getUint32(0,true);
+  if(length<2||length+4>MAX_META)throw Error('Invalid metadata size');
+  const count=Math.ceil((length+4)/BLOCK);
+  for(let i=0;i<count;i++)if(!this.metaBlocks.has(i))return;
+  const envelope=new Uint8Array(count*BLOCK);for(let i=0;i<count;i++)envelope.set(this.metaBlocks.get(i),i*BLOCK);
+  const meta=validateManifest(JSON.parse(decoder.decode(envelope.subarray(4,4+length))));if(meta.transferId!==p.transferId)throw Error('Metadata transfer identity mismatch');
+  this.manifest=meta;this.metaEntries.clear();this.metaBlocks.clear();this.state='opening';this.onManifest(meta);
+  this.writer=await this.open(meta);if(this.closed){await this.writer.abort?.();return;}
+  if(!this.writer||typeof this.writer.write!=='function')throw Error('Destination is not writable');
+  this.state='receiving';this.onProgress(this.progress());if(meta.size===0)await this.finish();
+ }
+ async finish(){
+  if(this.closed)return;
+  const digest=this.hash.hex();if(digest!==this.manifest.sha256)throw Error('SHA-256 mismatch: file was NOT validated');
+  await this.writer.close();if(this.closed)return;this.state='complete';this.entries.clear();this.recovered.clear();this.onProgress(this.progress());this.onComplete({manifest:this.manifest,sha256:digest,bytesWritten:this.bytesWritten});
+ }
+ async fail(error){if(this.state==='error'||this.closed)return;this.state='error';this.entries.clear();this.recovered.clear();try{await this.writer?.abort?.();}catch(_){}this.onError(error);this.onProgress(this.progress());}
+ async cancel(){this.closed=true;await this.chain;try{await this.writer?.abort?.();}catch(_){}this.entries.clear();this.recovered.clear();this.metaEntries.clear();this.metaBlocks.clear();this.state='cancelled';}
+}
+const API={SHA256,hashFile,Sender,Receiver,validateManifest,safeName,BLOCK,MAX_META,WINDOW,hex};
+root.CBDataTransfer=Object.freeze(API);if(typeof module!=='undefined'&&module.exports)module.exports=API;
+})(typeof globalThis!=='undefined'?globalThis:this);
+
+;
+/* ESP-FastWAV audio preparation and progressive reconstruction.
+ * Preview estimates, approximate RF observations and exact PCM remain separate.
+ * This module never opens hardware, starts transmission, or stops a transmitter.
+ */
+(function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.FastWAVAudio=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
+'use strict';
+const DEFAULT_MEMORY=256*1024*1024,MAX_RATE=384000;
+const clamp=(x,a,b)=>x<a?a:x>b?b:x;
+function integer(x,a,b,label){if(!Number.isSafeInteger(x)||x<a||x>b)throw RangeError(label||'Invalid integer');return x;}
+function rate(x){return integer(x,1000,MAX_RATE,'Unsupported sample rate');}
+function bytes(a){if(a instanceof ArrayBuffer)return new Uint8Array(a);if(ArrayBuffer.isView(a))return new Uint8Array(a.buffer,a.byteOffset,a.byteLength);throw TypeError('Byte buffer required');}
+function modeName(mode){mode=mode||'auto';if(!['auto','estimated','preview','mono','stereo','verified'].includes(mode))throw Error('Unknown playback quality');return mode;}
+function phaseOrder(n){integer(n,1,32,'Phase count must be 1..32');if(n===10)return[0,5,2,7,1,6,3,8,4,9];if((n&(n-1))===0){const bits=Math.log2(n);return Array.from({length:n},(_,i)=>{let x=i,y=0;for(let b=0;b<bits;b++){y=(y<<1)|(x&1);x>>>=1;}return y;});}const out=[0];while(out.length<n){let best=-1,distance=-1;for(let i=0;i<n;i++)if(!out.includes(i)){const d=Math.min(...out.map(x=>Math.min((i-x+n)%n,(x-i+n)%n)));if(d>distance){distance=d;best=i;}}out.push(best);}return out;}
+function phaseLength(frames,phase,n){integer(frames,0,Number.MAX_SAFE_INTEGER,'Frame count');integer(n,1,32,'Phase count');integer(phase,0,n-1,'Phase');return frames<=phase?0:Math.floor((frames-1-phase)/n)+1;}
+function extractPhase(pcm,phase,n,bits=16,startStep=0,maxSamples=Infinity){pcm=bytes(pcm);if(![8,16].includes(bits))throw Error('PCM bits must be 8 or16');const width=bits/8;if(pcm.length%width)throw Error('Incomplete PCM sample');const frames=pcm.length/width,total=phaseLength(frames,phase,n);integer(startStep,0,total,'Phase offset');if(maxSamples!==Infinity)integer(maxSamples,0,Number.MAX_SAFE_INTEGER,'Sample limit');const count=Math.min(total-startStep,maxSamples),out=new Uint8Array(count*width);for(let i=0;i<count;i++){const p=(phase+(startStep+i)*n)*width;out.set(pcm.subarray(p,p+width),i*width);}return out;}
+function q8(x){return clamp(Math.round(clamp(x,-1,1)*128)+128,0,255);}
+function q16(x){return clamp(Math.round(clamp(x,-1,1)*32768),-32768,32767);}
+function pcmBytes(values,bits=16){if(![8,16].includes(bits))throw Error('PCM output supports8 or16 bits');const out=new Uint8Array(values.length*bits/8),v=new DataView(out.buffer);for(let i=0;i<values.length;i++){if(!Number.isFinite(values[i]))throw Error('Non-finite audio sample');if(bits===8)out[i]=q8(values[i]);else v.setInt16(i*2,q16(values[i]),true);}return out;}
+function pcmFloat(pcm,bits=16){pcm=bytes(pcm);if(![8,16].includes(bits)||pcm.length%(bits/8))throw Error('Invalid PCM');const out=new Float32Array(pcm.length/(bits/8)),v=new DataView(pcm.buffer,pcm.byteOffset,pcm.byteLength);for(let i=0;i<out.length;i++)out[i]=bits===8?(pcm[i]-128)/128:v.getInt16(i*2,true)/32768;return out;}
+function wavHeader(frames,channels,sampleRate,bits){rate(sampleRate);integer(frames,0,Number.MAX_SAFE_INTEGER,'Frames');integer(channels,1,8,'Channels');if(![8,16].includes(bits))throw Error('WAV output supports8 or16bits');const dataBytes=frames*channels*bits/8;if(!Number.isSafeInteger(dataBytes)||dataBytes>0xffffffff-37)throw Error('WAV exceeds RIFF size limit');const out=new Uint8Array(44),v=new DataView(out.buffer),put=(at,s)=>{for(let i=0;i<s.length;i++)out[at+i]=s.charCodeAt(i);};put(0,'RIFF');v.setUint32(4,dataBytes+36+(dataBytes&1),true);put(8,'WAVE');put(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,channels,true);v.setUint32(24,sampleRate,true);v.setUint32(28,sampleRate*channels*bits/8,true);v.setUint16(32,channels*bits/8,true);v.setUint16(34,bits,true);put(36,'data');v.setUint32(40,dataBytes,true);return out;}
+function encodeWav(channels,sampleRate,bits=16){if(!Array.isArray(channels)||!channels.length)throw Error('Audio channels required');const frames=channels[0].length;if(channels.some(c=>c.length!==frames))throw Error('Channel lengths differ');const header=wavHeader(frames,channels.length,sampleRate,bits),size=frames*channels.length*bits/8,out=new Uint8Array(44+size+(size&1));out.set(header);const v=new DataView(out.buffer);let at=44;for(let i=0;i<frames;i++)for(const c of channels){if(!Number.isFinite(c[i]))throw Error('Non-finite audio sample');if(bits===8)out[at++]=q8(c[i]);else{v.setInt16(at,q16(c[i]),true);at+=2;}}return out;}
+function parseWav(input,{maxMemoryBytes=DEFAULT_MEMORY}={}){
+ const a=bytes(input),v=new DataView(a.buffer,a.byteOffset,a.byteLength),word=p=>String.fromCharCode(...a.subarray(p,p+4));
+ if(a.length<12||word(0)!=='RIFF'||word(8)!=='WAVE')throw Error('Expected little-endian RIFF/WAVE');
+ const declared=v.getUint32(4,true)+8;if(declared>a.length)throw Error('Truncated RIFF/WAVE');let fmt=null,data=null;
+ for(let p=12;p+8<=declared;){const id=word(p),n=v.getUint32(p+4,true),start=p+8;if(start+n>declared)throw Error('Truncated WAV chunk');if(id==='fmt '){if(n<16)throw Error('Truncated WAV format');let code=v.getUint16(start,true),channels=v.getUint16(start+2,true),sampleRate=v.getUint32(start+4,true),align=v.getUint16(start+12,true),bits=v.getUint16(start+14,true);if(code===0xfffe){if(n<40||v.getUint16(start+16,true)<22)throw Error('Invalid extensible WAV format');const tail=[0,0,16,0,128,0,0,170,0,56,155,113];for(let j=0;j<12;j++)if(a[start+28+j]!==tail[j])throw Error('Unsupported WAV subformat GUID');code=v.getUint32(start+24,true);}fmt={code,channels,sampleRate,align,bits};}else if(id==='data'&&!data)data={start,bytes:n};p=start+n+(n&1);}
+ if(!fmt||!data)throw Error('WAV needs fmt and data chunks');rate(fmt.sampleRate);integer(fmt.channels,1,8,'Unsupported WAV channel count');
+ if(!((fmt.code===1&&[8,16,24,32].includes(fmt.bits))||(fmt.code===3&&[32,64].includes(fmt.bits))))throw Error('Unsupported WAV encoding');
+ const width=fmt.bits/8;if(fmt.align!==fmt.channels*width||data.bytes%fmt.align)throw Error('Invalid WAV block alignment');const frames=data.bytes/fmt.align;
+ if(frames*fmt.channels*4>maxMemoryBytes)throw Error('Decoded WAV exceeds audio memory budget; select a shorter excerpt');const channels=Array.from({length:fmt.channels},()=>new Float32Array(frames));let at=data.start;
+ for(let i=0;i<frames;i++)for(let c=0;c<fmt.channels;c++){let x;if(fmt.code===3)x=fmt.bits===32?v.getFloat32(at,true):v.getFloat64(at,true);else if(fmt.bits===8)x=(a[at]-128)/128;else if(fmt.bits===16)x=v.getInt16(at,true)/32768;else if(fmt.bits===24){let n=a[at]|(a[at+1]<<8)|(a[at+2]<<16);if(n&0x800000)n|=0xff000000;x=n/8388608;}else x=v.getInt32(at,true)/2147483648;if(!Number.isFinite(x))throw Error('WAV contains non-finite audio');channels[c][i]=clamp(x,-1,1);at+=width;}
+ return{sampleRate:fmt.sampleRate,channels,bitsPerSample:fmt.bits,encoding:fmt.code===3?'float':'pcm',frames,duration:frames/fmt.sampleRate};
+}
+// Blackman-windowed sinc. Filtering happens BEFORE downsampling.
+const kernelCache=new Map();
+function kernelFor(sourceRate,targetRate){const ratio=Math.min(1,targetRate/sourceRate),radius=Math.min(192,Math.ceil(16/ratio)),phases=256,key=sourceRate+'/'+targetRate;let k=kernelCache.get(key);if(k)return k;const cutoff=ratio*.94,width=radius*2,table=new Float64Array(phases*width);for(let p=0;p<phases;p++){let sum=0;const frac=p/phases;for(let j=0;j<width;j++){const distance=j-radius+1-frac,r=distance/radius,w=Math.abs(r)>=1?0:.42+.5*Math.cos(Math.PI*r)+.08*Math.cos(2*Math.PI*r),z=cutoff*distance,c=(Math.abs(z)<1e-12?cutoff:Math.sin(Math.PI*z)/(Math.PI*distance))*w;table[p*width+j]=c;sum+=c;}for(let j=0;j<width;j++)table[p*width+j]/=sum;}k={radius,width,phases,table};if(kernelCache.size>=4)kernelCache.delete(kernelCache.keys().next().value);kernelCache.set(key,k);return k;}
+function resample(input,sourceRate,targetRate,{startSeconds=0,endSeconds=input.length/sourceRate}={}){rate(sourceRate);rate(targetRate);if(!Number.isFinite(startSeconds)||!Number.isFinite(endSeconds)||startSeconds<0||endSeconds<startSeconds||endSeconds>input.length/sourceRate+1e-9)throw Error('Invalid audio interval');const count=Math.round((endSeconds-startSeconds)*targetRate),out=new Float32Array(count);if(!count)return out;const lo=Math.floor(startSeconds*sourceRate),hi=Math.min(input.length-1,Math.ceil(endSeconds*sourceRate)-1),step=sourceRate/targetRate,base=startSeconds*sourceRate;if(sourceRate===targetRate&&Number.isInteger(base)){for(let i=0;i<count;i++){const x=input[base+i];if(!Number.isFinite(x))throw Error('Non-finite source sample');out[i]=x;}return out;}const k=kernelFor(sourceRate,targetRate);for(let i=0;i<count;i++){const pos=base+i*step,index=Math.floor(pos),phase=Math.min(k.phases-1,Math.round((pos-index)*k.phases));let sum=0;for(let j=0;j<k.width;j++){const x=input[clamp(index+j-k.radius+1,lo,hi)];if(!Number.isFinite(x))throw Error('Non-finite source sample');sum+=x*k.table[phase*k.width+j];}out[i]=sum;}return out;}
+
+// Read the same Float32 mono values used by the previous full-length downmix,
+// but only at the filter taps needed for the preview. No target-length buffer.
+function monoPreview(target,sourceRate,targetRate){
+ if(target.length===1)return resample(target[0],sourceRate,targetRate);
+ const length=target[0].length,count=Math.round((length/sourceRate)*targetRate),out=new Float32Array(count),read=i=>Math.fround((target[0][i]+target[1][i])/2);
+ if(sourceRate===targetRate){for(let i=0;i<count;i++)out[i]=read(i);return out;}
+ const k=kernelFor(sourceRate,targetRate),step=sourceRate/targetRate;
+ for(let i=0;i<count;i++){const pos=i*step,index=Math.floor(pos),phase=Math.min(k.phases-1,Math.round((pos-index)*k.phases));let sum=0;for(let j=0;j<k.width;j++)sum+=read(clamp(index+j-k.radius+1,0,length-1))*k.table[phase*k.width+j];out[i]=sum;}return out;
+}
+function prepareAudio(channels,sourceRate,opts={}){
+ if(!Array.isArray(channels)||channels.length<1||channels.length>8||!channels[0]?.length||channels.some(c=>c.length!==channels[0].length))throw Error('Invalid source channels');rate(sourceRate);
+ const totalDuration=channels[0].length/sourceRate,start=opts.startSeconds===undefined?0:Number(opts.startSeconds),end=opts.endSeconds===undefined?totalDuration:Number(opts.endSeconds),targetRate=rate(opts.targetRate||24000),targetBits=opts.targetBits||16,previewRate=rate(opts.previewRate||Math.min(8000,targetRate)),phaseCount=integer(opts.phaseCount||opts.phases||4,1,32,'Phase count');
+ if(![8,16].includes(targetBits))throw Error('Target PCM supports8 or16bits');if(previewRate>targetRate)throw Error('Preview rate must not exceed target rate');if(!Number.isFinite(start)||!Number.isFinite(end)||start<0||end<=start||end>totalDuration+1e-9)throw Error('Choose a valid non-empty start/end interval');
+ const channelMode=opts.channelMode||'mono';if(!['mono','stereo','midside'].includes(channelMode))throw Error('Unknown channel mode');const nChannels=channelMode==='mono'?1:2,frameCount=Math.round((end-start)*targetRate),previewFrames=Math.round(frameCount*previewRate/targetRate),budget=opts.maxMemoryBytes||DEFAULT_MEMORY;
+ integer(frameCount,1,Number.MAX_SAFE_INTEGER,'Audio interval is too short at the target rate');integer(previewFrames,1,Number.MAX_SAFE_INTEGER,'Audio interval is too short for a preview');integer(budget,1,Number.MAX_SAFE_INTEGER,'Memory budget');
+ const receiverBudget=integer(opts.maxReceiverMemoryBytes===undefined?DEFAULT_MEMORY:opts.maxReceiverMemoryBytes,1,Number.MAX_SAFE_INTEGER,'Receiver memory budget'),memoryInfo={...estimateReconstruction({frameCount,frames:frameCount,targetRate,targetBits,channels:nChannels,previewRate,previewFrames,phaseCount,channelMode},{hqMode:opts.hqMode||'analog'}),budgetBytes:receiverBudget};
+ if(memoryInfo.requiredBytes>receiverBudget)throw reconstructionBudgetError(memoryInfo,receiverBudget);
+ const sourceBytes=channels.reduce((sum,c)=>sum+c.length*4,0),aligned=sourceRate===targetRate&&Number.isInteger(start*sourceRate)&&channels.every(c=>Object.prototype.toString.call(c)==='[object Float32Array]'),inputExtra=channels[0].length*(channelMode==='mono'?(channels.length>1?4:0):channels.length>2?8:0),targetExtra=aligned?0:frameCount*nChannels*4;
+ const estimate=sourceBytes+inputExtra+targetExtra+frameCount*nChannels*targetBits/8+previewFrames*5+4*1024*1024;if(!Number.isSafeInteger(estimate)||estimate>budget)throw Error('Prepared audio exceeds memory budget; shorten the excerpt or lower the rate');
+ let input;if(channelMode==='mono'){if(channels.length===1)input=[channels[0]];else{const mono=new Float32Array(channels[0].length);for(let i=0;i<mono.length;i++){let x=0;for(const c of channels)x+=c[i];mono[i]=x/channels.length;}input=[mono];}}else if(channels.length<=2)input=[channels[0],channels[1]||channels[0]];else{const left=new Float32Array(channels[0].length),right=new Float32Array(left.length);for(let i=0;i<left.length;i++){let other=0;for(let c=2;c<channels.length;c++)other+=channels[c][i];other*=.70710678/(channels.length-2);left[i]=(channels[0][i]+other)/1.70710678;right[i]=(channels[1][i]+other)/1.70710678;}input=[left,right];}
+ const target=input.map(c=>{if(!aligned)return resample(c,sourceRate,targetRate,{startSeconds:start,endSeconds:end});const view=c.subarray(start*sourceRate,start*sourceRate+frameCount);for(let i=0;i<view.length;i++)if(!Number.isFinite(view[i]))throw Error('Non-finite source sample');return view;});
+ const previewFloat=monoPreview(target,targetRate,previewRate),preview=pcmBytes(previewFloat,8);
+ let planes;if(channelMode==='midside'){planes=Array.from({length:2},()=>new Uint8Array(frameCount*targetBits/8));const views=planes.map(p=>new DataView(p.buffer));for(let i=0;i<frameCount;i++){const mid=Math.fround((target[0][i]+target[1][i])/2),side=Math.fround((target[0][i]-target[1][i])/2);if(targetBits===8){planes[0][i]=q8(mid);planes[1][i]=q8(side);}else{views[0].setInt16(i*2,q16(mid),true);views[1].setInt16(i*2,q16(side),true);}}}else planes=target.map(c=>pcmBytes(c,targetBits));
+ const order=phaseOrder(phaseCount),manifest={targetRate,targetBits,channels:nChannels,frameCount,frames:frameCount,duration:frameCount/targetRate,previewRate,previewFrames:preview.length,phaseCount,phaseOrder:order,channelMode,startSeconds:start,endSeconds:end,sourceRate,sourceChannels:channels.length};
+ return{manifest,preview,planes,phaseOrder:order,estimatedPreparationBytes:estimate,memoryInfo};
+}
+function manifestOf(m){if(!m)throw Error('Audio manifest required');const frameCount=m.frameCount===undefined?m.frames:m.frameCount;if(m.frames!==undefined&&m.frames!==frameCount)throw Error('Inconsistent frame count');integer(frameCount,1,Number.MAX_SAFE_INTEGER,'Audio frame count');rate(m.targetRate);rate(m.previewRate);if(![8,16].includes(m.targetBits))throw Error('Target PCM bits');integer(m.channels,1,2,'Audio channels');integer(m.previewFrames,1,Number.MAX_SAFE_INTEGER,'Preview frames');integer(m.phaseCount,1,32,'Phase count');const channelMode=m.channelMode|| (m.channels===1?'mono':'stereo');if(!['mono','stereo','midside'].includes(channelMode)||channelMode==='midside'&&m.channels!==2)throw Error('Channel mode');return{...m,frameCount,frames:frameCount,channelMode,duration:frameCount/m.targetRate};}
+
+const BIT_VARIANCE_MAX=2,VARIANCE_SCALE=65535/BIT_VARIANCE_MAX,VARIANCE_QUANTUM=1/VARIANCE_SCALE;
+const bitBytes=n=>Math.ceil(n/8),bitGet=(a,i)=>a?((a[i>>>3]>>>(i&7))&1):0;
+function bitSet(a,i){a[i>>>3]|=1<<(i&7);}
+function bitClear(a,i){a[i>>>3]&=~(1<<(i&7));}
+function estimateReconstruction(manifest,{hqMode=manifest?.hqMode||'analog'}={}){
+ const m=manifestOf(manifest);if(!['analog','exact'].includes(hqMode))throw Error('Unknown HQ mode');
+ const previewBytes=m.previewFrames*6+bitBytes(m.previewFrames),exactHQBytes=m.channels*(m.frameCount*m.targetBits/8+bitBytes(m.frameCount));
+ let phaseSeenBytes=0;for(let p=0;p<m.phaseCount;p++)phaseSeenBytes+=bitBytes(phaseLength(m.frameCount,p,m.phaseCount));
+ const analogHQBytes=m.channels*(m.frameCount*8+bitBytes(m.frameCount)+phaseSeenBytes),analogBytes=previewBytes+analogHQBytes,exactBytes=previewBytes+exactHQBytes,mixedBytes=previewBytes+analogHQBytes+exactHQBytes;
+ for(const n of [previewBytes,exactHQBytes,analogHQBytes,analogBytes,exactBytes,mixedBytes])integer(n,1,Number.MAX_SAFE_INTEGER,'Reconstruction memory size');
+ return{hqMode,baseBytes:previewBytes,previewBytes,analogHQBytes,exactHQBytes,analogBytes,exactBytes,mixedBytes,requiredBytes:hqMode==='exact'?exactBytes:analogBytes};
+}
+function reconstructionBudgetError(info,budgetBytes){const e=Error('Audio reconstruction exceeds memory budget ('+(info.requiredBytes/1048576).toFixed(1)+' MiB required / '+(budgetBytes/1048576).toFixed(1)+' MiB available)');e.code='RX_MEMORY_BUDGET';e.memoryInfo={...info,budgetBytes};return e;}
+// Physical preview and each channel/phase arrive chronologically. One bit per
+// position deduplicates a cycle; a new cycle clears that stream's compact map.
+// A stale cycle is rejected, including when it contains previously unseen points.
+class CycleSeen{
+ constructor(length){this.seen=new Uint8Array(bitBytes(length));this.hasCycle=false;this.cycle=0;}
+ begin(cycle){integer(cycle,0,0xffffffff,'Cycle');if(this.hasCycle){const d=(cycle-this.cycle)>>>0;if(d>=0x80000000)return false;if(d===0)return true;}this.hasCycle=true;this.cycle=cycle;this.seen.fill(0);return true;}
+ claim(index){if(bitGet(this.seen,index))return false;bitSet(this.seen,index);return true;}
+}
+class ProgressiveAudio{
+ constructor({manifest,maxMemoryBytes=DEFAULT_MEMORY,stableThreshold=2/128}={}){
+  this.manifest=manifestOf(manifest);this.maxMemoryBytes=integer(maxMemoryBytes,1,Number.MAX_SAFE_INTEGER,'Memory budget');this.stableThreshold=stableThreshold;if(!Number.isFinite(stableThreshold)||stableThreshold<=0)throw Error('Stability threshold');
+  this.memoryInfo=estimateReconstruction(this.manifest);if(this.memoryInfo.requiredBytes>maxMemoryBytes)throw reconstructionBudgetError(this.memoryInfo,maxMemoryBytes);
+  const m=this.manifest;this.memoryBytes=this.memoryInfo.baseBytes;
+  this.preview=new Float32Array(m.previewFrames);this.previewCount=new Uint16Array(m.previewFrames);this.previewStream=new CycleSeen(m.previewFrames);this.previewKnown=0;
+  this.hqBytes=Array(m.channels).fill(null);this.hqMask=Array(m.channels).fill(null);this.hqViews=Array(m.channels).fill(null);this.approx=Array(m.channels).fill(null);this.exactKnown=Array(m.channels).fill(0);this.approxKnown=Array(m.channels).fill(0);this.unionKnown=Array(m.channels).fill(0);this.stableKnown=Array(m.channels).fill(0);this.integrityVerified=false;this.verificationError=null;this.counters={previewObservations:0,approxObservations:0,duplicateObservations:0,exactDuplicates:0,exactConflicts:0};
+ }
+ _reserve(extra){if(this.memoryBytes+extra>this.maxMemoryBytes)throw reconstructionBudgetError({...this.memoryInfo,requiredBytes:this.memoryBytes+extra},this.maxMemoryBytes);}
+ // Counts cap at60000, then the mean uses bounded, slowly forgetting updates.
+ ingestPreview(start,values,valid,cycle){integer(start,0,this.preview.length,'Preview offset');if(!values||start+values.length>this.preview.length||valid&&valid.length!==values.length)throw Error('Preview range');for(let j=0;j<values.length;j++)if((!valid||valid[j])&&(!Number.isFinite(values[j])||values[j]<0||values[j]>255))throw Error('Preview expects unsigned PCM8 units0..255');
+  const tracked=cycle!==undefined&&cycle!==null,current=!tracked||this.previewStream.begin(cycle);
+  for(let j=0;j<values.length;j++){if(valid&&!valid[j])continue;const i=start+j;if(tracked&&(!current||!this.previewStream.claim(i))){this.counters.duplicateObservations++;continue;}const c=this.previewCount[i],x=(values[j]-128)/128,n=Math.min(60000,c+1);this.preview[i]+=(x-this.preview[i])/n;this.previewCount[i]=n;if(!c)this.previewKnown++;this.counters.previewObservations++;}return this.stats();
+ }
+ _range(channel,phase,startStep,count){const m=this.manifest;integer(channel,0,m.channels-1,'Channel');integer(phase,0,m.phaseCount-1,'Phase');const n=phaseLength(m.frameCount,phase,m.phaseCount);integer(startStep,0,n,'Phase offset');integer(count,0,n-startStep,'HQ sample count');return m.phaseCount;}
+ _exact(channel){if(this.hqBytes[channel])return;const m=this.manifest,n=m.frameCount,extra=n*m.targetBits/8+bitBytes(n);this._reserve(extra);const data=new Uint8Array(n*m.targetBits/8),mask=new Uint8Array(bitBytes(n));this.hqBytes[channel]=data;this.hqMask[channel]=mask;this.hqViews[channel]=new DataView(data.buffer);this.memoryBytes+=extra;}
+ ingestHQ(channel,phase,startStep,pcm){pcm=bytes(pcm);const width=this.manifest.targetBits/8;if(pcm.length%width)throw Error('Incomplete HQ PCM');const count=pcm.length/width,step=this._range(channel,phase,startStep,count);if(!count)return this.stats();this._exact(channel);const dst=this.hqBytes[channel],mask=this.hqMask[channel];for(let j=0;j<count;j++){const i=phase+(startStep+j)*step;if(bitGet(mask,i))for(let b=0;b<width;b++)if(dst[i*width+b]!==pcm[j*width+b]){this.counters.exactConflicts++;throw Error('Conflicting exact PCM for the same position');}}
+  for(let j=0;j<count;j++){const i=phase+(startStep+j)*step;if(bitGet(mask,i)){this.counters.exactDuplicates++;continue;}const a=this.approx[channel];dst.set(pcm.subarray(j*width,j*width+width),i*width);bitSet(mask,i);this.exactKnown[channel]++;if(!a?.count[i])this.unionKnown[channel]++;if(!bitGet(a?.stable,i))this.stableKnown[channel]++;}return this.stats();
+ }
+ _approx(channel){if(this.approx[channel])return this.approx[channel];const m=this.manifest,n=m.frameCount;let seenBytes=0;for(let p=0;p<m.phaseCount;p++)seenBytes+=bitBytes(phaseLength(n,p,m.phaseCount));const extra=n*8+bitBytes(n)+seenBytes;this._reserve(extra);const a={mean:new Float32Array(n),variance:new Uint16Array(n),count:new Uint16Array(n),stable:new Uint8Array(bitBytes(n)),streams:Array.from({length:m.phaseCount},(_,p)=>new CycleSeen(phaseLength(n,p,m.phaseCount)))};this.approx[channel]=a;this.memoryBytes+=extra;return a;}
+ ingestApprox(channel,phase,startStep,values,valid,cycle){const count=values?.length||0,step=this._range(channel,phase,startStep,count);if(valid&&valid.length!==count)throw Error('Approximate validity length');for(let j=0;j<count;j++)if((!valid||valid[j])&&!Number.isFinite(values[j]))throw Error('Non-finite approximate sample');if(!count)return this.stats();const a=this._approx(channel),mask=this.hqMask[channel],tracked=cycle!==undefined&&cycle!==null,stream=a.streams[phase],current=!tracked||stream.begin(cycle);
+  for(let j=0;j<count;j++){if(valid&&!valid[j])continue;const i=phase+(startStep+j)*step;if(bitGet(mask,i))continue;if(tracked&&(!current||!stream.claim(startStep+j))){this.counters.duplicateObservations++;continue;}const c=a.count[i],x=clamp(values[j],-1,1),n=Math.min(60000,c+1),d=x-a.mean[i],oldStable=bitGet(a.stable,i);let m2=(a.variance[i]/VARIANCE_SCALE)*Math.max(0,c-1);a.mean[i]+=d/n;if(c===n)m2*=(n-1)/n;m2+=d*(x-a.mean[i]);a.variance[i]=Math.round(clamp(m2/Math.max(1,n-1),0,BIT_VARIANCE_MAX)*VARIANCE_SCALE);a.count[i]=n;if(!c){this.approxKnown[channel]++;this.unionKnown[channel]++;}
+   // Variance quantization never modifies the audio mean. Its accumulated
+   // rounding error divided by n is bounded by half a quantum, including the
+   // capped-count recurrence, so this upper margin cannot enable false stability.
+   const upperMeanVariance=a.variance[i]/VARIANCE_SCALE/n+VARIANCE_QUANTUM/2,stable=n>=3&&upperMeanVariance<=this.stableThreshold*this.stableThreshold;
+   if(stable){bitSet(a.stable,i);if(!oldStable)this.stableKnown[channel]++;}else{bitClear(a.stable,i);if(oldStable)this.stableKnown[channel]--;}this.counters.approxObservations++;}return this.stats();
+ }
+ ingestApproxHQ(channel,phase,startStep,values,valid,cycle){this._range(channel,phase,startStep,values.length);const x=new Float32Array(values.length);for(let i=0;i<x.length;i++){if(!valid||valid[i]){if(!Number.isFinite(values[i])||values[i]<0||values[i]>255)throw Error('Approximate HQ expects unsigned PCM8 units');x[i]=(values[i]-128)/128;}}return this.ingestApprox(channel,phase,startStep,x,valid,cycle);}
+ _previewAt(position){if(!this.previewKnown)return 0;const n=this.preview.length,pos=clamp(position,0,n-1),at=Math.floor(pos);let l=at,r=Math.ceil(pos);for(let d=0;d<=64;d++){if(l>=0&&this.previewCount[l])break;l--;}for(let d=0;d<=64;d++){if(r<n&&this.previewCount[r])break;r++;}const left=l>=0&&at-l<=64&&this.previewCount[l],right=r<n&&r-at<=64&&this.previewCount[r];if(left&&right)return l===r?this.preview[l]:this.preview[l]+(this.preview[r]-this.preview[l])*(pos-l)/(r-l);if(left)return this.preview[l]*clamp(1-(pos-l)/64,0,1);if(right)return this.preview[r]*clamp(1-(r-pos)/64,0,1);return 0;}
+ _base(channel,index){if(this.manifest.channelMode==='midside'&&channel===1)return 0;return this._previewAt(index*this.manifest.previewRate/this.manifest.targetRate);}
+ _known(channel,index){if(index<0||index>=this.manifest.frameCount)return undefined;if(bitGet(this.hqMask[channel],index))return this.manifest.targetBits===8?(this.hqBytes[channel][index]-128)/128:this.hqViews[channel].getInt16(index*2,true)/32768;const a=this.approx[channel];return a?.count[index]?a.mean[index]:undefined;}
+ _plane(channel,index){const exact=this._known(channel,index);if(exact!==undefined)return exact;const base=this._base(channel,index),limit=this.manifest.phaseCount*2;let l=index-1,r=index+1,lv,rv;for(let d=1;d<=limit;d++){if(l>=0&&(lv=this._known(channel,l))!==undefined)break;l--;}for(let d=1;d<=limit;d++){if(r<this.manifest.frameCount&&(rv=this._known(channel,r))!==undefined)break;r++;}if(lv!==undefined&&rv!==undefined){const dl=lv-this._base(channel,l),dr=rv-this._base(channel,r);return clamp(base+dl+(dr-dl)*(index-l)/(r-l),-1,1);}if(lv!==undefined)return clamp(base+(lv-this._base(channel,l))*(1-(index-l)/(limit+1)),-1,1);if(rv!==undefined)return clamp(base+(rv-this._base(channel,r))*(1-(r-index)/(limit+1)),-1,1);return base;}
+ render(channel,start,count,{mode='auto'}={}){mode=modeName(mode);integer(channel,0,this.manifest.channels-1,'Playback channel');integer(start,0,Number.MAX_SAFE_INTEGER,'Playback start');integer(count,0,Number.MAX_SAFE_INTEGER,'Playback count');if(count*4>this.maxMemoryBytes)throw Error('Playback block exceeds memory budget');if(mode==='verified'&&!this.integrityVerified)throw Error('Exact PCM has not been verified');const out=new Float32Array(count),m=this.manifest;for(let j=0;j<count;j++){const i=start+j;if(i>=m.frameCount)continue;let x;if(mode==='preview')x=this._previewAt(i*m.previewRate/m.targetRate);else if(mode==='mono'){x=m.channelMode==='midside'?this._plane(0,i):m.channels===1?this._plane(0,i):(this._plane(0,i)+this._plane(1,i))/2;}else if(m.channelMode==='midside')x=this._plane(0,i)+(channel===0?1:-1)*this._plane(1,i);else x=this._plane(channel,i);out[j]=clamp(x,-1,1);}return out;}
+ renderChannels(start,count,opts={}){const mode=modeName(opts.mode),n=mode==='preview'||mode==='mono'?1:this.manifest.channels;return Array.from({length:n},(_,c)=>this.render(c,start,count,{...opts,mode}));}
+ stats(){const m=this.manifest,total=m.frameCount*m.channels,exact=this.exactKnown.reduce((a,b)=>a+b,0),approx=this.approxKnown.reduce((a,b)=>a+b,0),known=this.unionKnown.reduce((a,b)=>a+b,0),stable=this.stableKnown.reduce((a,b)=>a+b,0);return{duration:m.duration,targetRate:m.targetRate,sampleRate:m.targetRate,targetBits:m.targetBits,frameCount:m.frameCount,channels:m.channels,previewSamplesKnown:this.previewKnown,previewCoverage:this.previewKnown/m.previewFrames,approxSamplesKnown:approx,approxCoverage:approx/total,exactSamplesKnown:exact,exactCoverage:exact/total,hqSamplesKnown:known,hqCoverage:known/total,stableSamples:stable,stableCoverage:stable/total,completePreview:this.previewKnown===m.previewFrames,completeApprox:known===total,completeExact:exact===total,stableEstimated:stable===total,verified:this.integrityVerified,verificationError:this.verificationError,memoryBytes:this.memoryBytes,memoryRequiredBytes:this.memoryInfo.requiredBytes,memoryBudgetBytes:this.maxMemoryBytes,...this.counters,perChannel:this.exactKnown.map((n,c)=>({exact:n,approx:this.approxKnown[c],known:this.unionKnown[c],stable:this.stableKnown[c],exactCoverage:n/m.frameCount,hqCoverage:this.unionKnown[c]/m.frameCount}))};}
+ getExactPlanes({copy=true}={}){if(!this.stats().completeExact)throw Error('Exact PCM is incomplete');return this.hqBytes.map(b=>copy?b.slice():b);}
+ verifyExact(expectedHashes,hashFunction){if(!Array.isArray(expectedHashes)||expectedHashes.length!==this.manifest.channels||expectedHashes.some(h=>!/^[a-f0-9]{64}$/i.test(h))||typeof hashFunction!=='function')throw Error('Expected target hashes and hash function required');const planes=this.getExactPlanes({copy:false}),ok=planes.every((b,c)=>String(hashFunction(b)).toLowerCase()===expectedHashes[c].toLowerCase());this.integrityVerified=ok;this.verificationError=ok?null:'Target PCM hash mismatch';return ok;}
+}
+function encodeCurrentWav(receiver,{mode='auto',bits=receiver.manifest.targetBits,maxMemoryBytes=DEFAULT_MEMORY}={}){const m=receiver.manifest,channels=mode==='preview'||mode==='mono'?1:m.channels,header=wavHeader(m.frameCount,channels,m.targetRate,bits),dataSize=m.frameCount*channels*bits/8,size=44+dataSize+(dataSize&1);if(size>maxMemoryBytes)throw Error('WAV export exceeds memory budget; use streaming export');const out=new Uint8Array(size);out.set(header);const view=new DataView(out.buffer);let at=44;for(let start=0;start<m.frameCount;start+=8192){const block=receiver.renderChannels(start,Math.min(8192,m.frameCount-start),{mode});for(let i=0;i<block[0].length;i++)for(const c of block){if(bits===8)out[at++]=q8(c[i]);else{view.setInt16(at,q16(c[i]),true);at+=2;}}}return out;}
+async function writeWav(receiver,writer,{mode='auto',bits=receiver.manifest.targetBits,blockFrames=8192}={}){if(!writer||typeof writer.write!=='function')throw Error('Writable destination required');integer(blockFrames,1,65536,'Export block');const m=receiver.manifest,n=mode==='preview'||mode==='mono'?1:m.channels;await writer.write(wavHeader(m.frameCount,n,m.targetRate,bits));for(let start=0;start<m.frameCount;start+=blockFrames){const block=receiver.renderChannels(start,Math.min(blockFrames,m.frameCount-start),{mode}),data=new Uint8Array(block[0].length*n*bits/8),v=new DataView(data.buffer);let p=0;for(let i=0;i<block[0].length;i++)for(const c of block){if(bits===8)data[p++]=q8(c[i]);else{v.setInt16(p,q16(c[i]),true);p+=2;}}await writer.write(data);}if((m.frameCount*n*bits/8)&1)await writer.write(Uint8Array.of(0));return{frames:m.frameCount,channels:n,sampleRate:m.targetRate,bits};}
+function crossfade(oldBlock,newBlock,{offset=0,total=Math.max(oldBlock.length,newBlock.length)}={}){if(oldBlock.length!==newBlock.length||total<1)throw Error('Crossfade dimensions');const out=new Float32Array(oldBlock.length);for(let i=0;i<out.length;i++){const t=clamp((offset+i)/Math.max(1,total-1),0,1),w=(1-Math.cos(Math.PI*t))/2;out[i]=oldBlock[i]*(1-w)+newBlock[i]*w;}return out;}
+return Object.freeze({DEFAULT_MEMORY,phaseOrder,phaseLength,extractPhase,pcmBytes,pcmFloat,wavHeader,parseWav,encodeWav,resample,prepareAudio,estimateReconstruction,ProgressiveAudio,encodeCurrentWav,writeWav,crossfade});
+});
+
+;
+/* ESP-FastWAV v1 transport. File metadata and verified HQ use protected raster
+ * symbols. Preview/analog HQ use real received amplitudes, never a file side channel.
+ * The analog radio engine, serial firmware and 120 ksample/s clock are unchanged.
+ */
+(function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.FastWAVCore=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
+'use strict';
+const MODE='bw128',WIDTH=128,HEIGHT=96,FRAME_SAMPLES=19008,SAMPLE_RATE=120000;
+const CAPACITY=1536,BLOCK=864,STRIDE=2**40,MAX_METADATA=65536,MAX_INFLIGHT=128;
+const MAGIC=[70,87,80,49],META_PROTOCOL='ESP-FASTWAV-1';
+const encoder=new TextEncoder(),decoder=new TextDecoder('utf-8',{fatal:true});
+const clip=(n,a,b)=>Math.max(a,Math.min(b,n));
+function integer(n,a,b,name){if(!Number.isSafeInteger(n)||n<a||n>b)throw RangeError(name||'integer');return n;}
+function bytes(v,name){if(!(v instanceof Uint8Array)&&!(v instanceof Uint8ClampedArray))throw TypeError(name||'bytes');return v;}
+function put64(a,p,value){integer(value,0,Number.MAX_SAFE_INTEGER,'uint64');const v=new DataView(a.buffer,a.byteOffset,a.byteLength);v.setUint32(p,value>>>0,true);v.setUint32(p+4,Math.floor(value/4294967296),true);}
+function get64(a,p){const v=new DataView(a.buffer,a.byteOffset,a.byteLength),n=v.getUint32(p,true)+v.getUint32(p+4,true)*4294967296;return integer(n,0,Number.MAX_SAFE_INTEGER,'uint64');}
+function phaseOrder(n){if(n===4)return[0,2,1,3];if(n===8)return[0,4,2,6,1,5,3,7];if(n===10)return[0,5,2,7,1,6,3,8,4,9];if(n===1)return[0];if(n===2)return[0,1];throw RangeError('phaseCount must be 1,2,4,8,10');}
+function phaseLength(frames,phase,n){integer(frames,0,0x7fffffff,'frameCount');integer(phase,0,n-1,'phase');return phase>=frames?0:1+Math.floor((frames-1-phase)/n);}
+function encodeKey(channel,phase,block){integer(channel,0,1,'channel');integer(phase,0,15,'phase');integer(block,0,STRIDE-1,'block');return(channel*16+phase)*STRIDE+block;}
+function decodeKey(key){integer(key,0,Number.MAX_SAFE_INTEGER,'generation');const slot=Math.floor(key/STRIDE),channel=Math.floor(slot/16),phase=slot%16,block=key-slot*STRIDE;if(channel>1)throw RangeError('generation channel');return{channel,phase,block};}
+function uid(){if(globalThis.crypto?.getRandomValues)return globalThis.crypto.getRandomValues(new Uint32Array(1))[0];throw Error('Pass an explicit trackId when cryptographic randomness is unavailable');}
+function normalizeManifest(input,options={}){
+ if(!input||typeof input!=='object')throw TypeError('Audio manifest required');
+ const frames=input.frameCount??input.frames;
+ if(input.frameCount!==undefined&&input.frames!==undefined&&input.frameCount!==input.frames)throw Error('Conflicting audio frame counts');
+ integer(frames,1,0x7fffffff,'frameCount');
+ const targetRate=integer(input.targetRate,1000,192000,'targetRate'),targetBits=integer(input.targetBits,8,16,'targetBits');if(![8,16].includes(targetBits))throw RangeError('targetBits');
+ const channels=integer(input.channels,1,2,'channels'),n=integer(input.phaseCount,1,10,'phaseCount'),defaultOrder=phaseOrder(n);
+ const order=input.phaseOrder===undefined?defaultOrder:Array.from(input.phaseOrder);
+ if(order.length!==n||new Set(order).size!==n||order.some(x=>!Number.isInteger(x)||x<0||x>=n))throw Error('Invalid phase order');
+ const previewRate=integer(input.previewRate,1000,48000,'previewRate'),previewFrames=integer(input.previewFrames,1,0x7fffffff,'previewFrames');
+ const trackId=integer(options.trackId??input.trackId??uid(),0,0xffffffff,'trackId');
+ const fecPercent=integer(options.fecPercent??input.fecPercent??100,0,800,'fecPercent'),hqMode=options.hqMode??input.hqMode??'analog';if(!['analog','exact'].includes(hqMode))throw Error('hqMode must be analog or exact');
+ if(input.protocol!==undefined&&input.protocol!==META_PROTOCOL)throw Error('Wrong audio protocol');
+ const hashes=Array.isArray(input.targetHashes)?input.targetHashes.map(String):[];
+ if(hashes.length&&(hashes.length!==channels||hashes.some(x=>!(/^[0-9a-f]{64}$/i).test(x))))throw Error('Invalid target hashes');
+ if(input.previewHash!=null&&!(/^[0-9a-f]{64}$/i).test(String(input.previewHash)))throw Error('Invalid preview hash');
+ return{...input,protocol:META_PROTOCOL,version:1,trackId,frameCount:frames,frames,targetRate,targetBits,channels,previewRate,previewFrames,phaseCount:n,phaseOrder:order,hqMode,fecPercent,duration:frames/targetRate,
+  channelMode:channels===1?'mono':String(input.channelMode||'stereo'),title:String(input.title||input.name||'Audio').slice(0,1024),targetHashes:hashes.map(x=>x.toLowerCase()),previewHash:input.previewHash?String(input.previewHash).toLowerCase():null,
+  analogEncoding:"differential4",analogNominalLevels:256,analogBitExact:false};
+}
+function headerPayload(h){
+ const a=new Uint8Array(36),v=new DataView(a.buffer);a.set(MAGIC);a[4]=integer(h.kind,0,2,'header kind');a[5]=integer(h.channel??0,0,1,'channel');a[6]=integer(h.phase??0,0,15,'phase');a[7]=integer(h.phaseCount??1,1,16,'phaseCount');put64(a,8,h.startStep??h.start??0);
+ v.setUint32(16,integer(h.count,0,0x7fffffff,'count'),true);v.setUint32(20,integer(h.rate,1000,192000,'sample rate'),true);v.setUint32(24,integer(h.cycle??0,0,0xffffffff,'cycle'),true);a[28]=integer(h.sampleBits??8,8,16,'sampleBits');a[29]=1;a[30]=1;v.setUint32(32,integer(h.totalFrames,1,0x7fffffff,'totalFrames'),true);return a;
+}
+function readHeader(p){
+ if(!p||p.type!==2||p.k!==1||p.n!==1||p.index!==0||!p.payload||p.payload.length!==36)return null;
+ const a=p.payload;if(!MAGIC.every((v,i)=>a[i]===v)||a[29]!==1||a[30]!==1||a[4]>2||![8,16].includes(a[28])||a[5]>1||a[6]>=a[7]||![1,2,4,8,10].includes(a[7]))return null;
+ try{const v=new DataView(a.buffer,a.byteOffset,a.byteLength);return{trackId:p.transferId,kind:a[4],channel:a[5],phase:a[6],phaseCount:a[7],startStep:get64(a,8),count:v.getUint32(16,true),rate:v.getUint32(20,true),cycle:v.getUint32(24,true),sampleBits:a[28],totalFrames:v.getUint32(32,true),image:p.image||null};}catch(_){return null;}
+}
+function createTransport(C,D){
+ if(!C?.Decoder||!C?.makeWave||!D?.encodeGeneration||!D?.renderImage)throw Error('CBAnalogV8 and CBDataV1 are required');
+ if(C.getFormat(MODE).w!==WIDTH||C.getFormat(MODE).h!==HEIGHT||C.plan(MODE).fieldSamples!==FRAME_SAMPLES)throw Error('Unexpected analog raster');
+ const tiles=D.layout(WIDTH,HEIGHT).tiles;if(tiles.length!==4||tiles.some(t=>t.width!==64||t.height!==48))throw Error('Unexpected DATA tile layout');
+ function encodePacketFrame(frames){if(!Array.isArray(frames)||frames.length>4)throw RangeError('At most four protected packets per image');return D.renderImage(frames,WIDTH,HEIGHT);}
+ function protectedHeader(h){return D.encodeFrame({type:2,transferId:integer(h.trackId,0,0xffffffff,'trackId'),generation:h.startStep??h.start??0,k:1,n:1,index:0,payload:headerPayload(h)});}
+ function encodeAnalogFrame(values,h){
+  if(!values||values.length>CAPACITY||!values.length)throw RangeError('Analog block must contain 1..1536 samples');
+  const head=protectedHeader({...h,count:values.length}),rgba=encodePacketFrame([head,head]);
+  for(let i=0;i<values.length;i++){
+   if(!Number.isFinite(values[i]))throw Error('Non-finite analog sample');const q=Math.round(clip(values[i],0,255));
+   for(let copy=0;copy<4;copy++){const position=i*4+copy,t=tiles[2+Math.floor(position/3072)],at=position%3072,x=t.x+at%64,y=t.y+Math.floor(at/64),j=(y*WIDTH+x)*4;rgba[j]=rgba[j+1]=rgba[j+2]=copy<2?q:255-q;rgba[j+3]=255;}
+  }return rgba;
+ }
+ function encodePreviewFrame(values,h){return encodeAnalogFrame(values,{...h,kind:0,channel:0,phase:0,phaseCount:1,sampleBits:8,startStep:h.start??h.startStep??0,rate:h.previewRate??h.rate,totalFrames:h.previewFrames??h.totalFrames});}
+ function encodeApproxFrame(values,h){return encodeAnalogFrame(values,{...h,kind:1,rate:h.targetRate??h.rate,totalFrames:h.frameCount??h.frames??h.totalFrames});}
+ function waveRGBA(rgba){return C.makeWave(C.sourceFromRGBA(MODE,rgba),MODE);}
+ function decodeImage(luma,valid){
+  if(!luma||luma.length!==WIDTH*HEIGHT||!valid||valid.length!==luma.length)throw RangeError('Expected neutral Y and its validity bitmap');
+  const packets=D.decodeImage(null,WIDTH,HEIGHT,{luma,valid}),headers=packets.map(readHeader).filter(Boolean);
+  let h=null,conflict=false;
+  for(const candidate of headers){const comparable=x=>JSON.stringify({...x,image:null});if(!h)h=candidate;else if(comparable(h)!==comparable(candidate))conflict=true;else if(Math.abs(candidate.image?.dx||0)+Math.abs(candidate.image?.dy||0)<Math.abs(h.image?.dx||0)+Math.abs(h.image?.dy||0))h=candidate;}
+  if(conflict)return{packets,header:null,analog:null,conflictingHeaders:true};
+  if(!h||h.kind===2)return{packets,header:h,analog:null,conflictingHeaders:false};
+  if(h.count<1||h.count>CAPACITY)return{packets,header:null,analog:null,conflictingHeaders:false};
+  const values=new Float32Array(h.count),known=new Uint8Array(h.count),dx=h.image?.dx||0,dy=h.image?.dy||0;
+  for(let i=0;i<h.count;i++){let sum=0,n=0;for(let copy=0;copy<4;copy++){const position=i*4+copy,t=tiles[2+Math.floor(position/3072)],at=position%3072,x=t.x+at%64+dx,y=t.y+Math.floor(at/64)+dy;if(x>=0&&x<WIDTH&&y>=0&&y<HEIGHT){const p=y*WIDTH+x;if(valid[p]){sum+=copy<2?luma[p]:255-luma[p];n++;}}}if(n===4){values[i]=sum/4;known[i]=1;}}
+  return{packets,header:h,analog:{values,valid:known},conflictingHeaders:false};
+ }
+ function metadataFrames(manifest){
+  const json=encoder.encode(JSON.stringify(manifest));if(json.length+4>MAX_METADATA)throw RangeError('Metadata too large');const envelope=new Uint8Array(json.length+4);new DataView(envelope.buffer).setUint32(0,json.length,true);envelope.set(json,4);
+  const result=[];for(let at=0,g=0;at<envelope.length;at+=BLOCK,g++)result.push(...D.encodeGeneration(envelope.subarray(at,at+BLOCK),{type:1,transferId:manifest.trackId,generation:g,redundancy:Math.max(100,manifest.fecPercent)}).frames);return result;
+ }
+ class Sender{
+  constructor(track,options={}){
+   if(!track?.manifest||!track.preview||!Array.isArray(track.planes))throw Error('Prepared audio track required');
+   this.manifest=normalizeManifest(track.manifest,options);this.track=track;this.bps=this.manifest.targetBits/8;
+   bytes(track.preview,'Preview bytes');if(track.preview.length!==this.manifest.previewFrames||track.planes.length!==this.manifest.channels)throw Error('Prepared audio dimensions mismatch');
+   for(const p of track.planes){bytes(p,'Audio plane');if(p.length!==this.manifest.frames*this.bps)throw Error('Prepared PCM plane length mismatch');}
+   this.cycles=integer(options.cycles??0,0,1000000,'cycles');this.onFrame=options.onFrame||(()=>{});this.onPass=options.onPass||(()=>{});this.onProgress=options.onProgress||(()=>{});
+   this.meta=metadataFrames(this.manifest);this.metaCursor=0;this.resumeStage='preview';this.stage='warmup';this.warmupLeft=2;this.metadataEvery=integer(options.metadataEveryFrames??64,1,1000000,'metadata interval');
+   this.s={cycle:integer(options.initialCycle??0,0,0xffffffff,'initialCycle'),kind:'warmup',channel:0,phase:0,sourceSamples:0,totalSamples:0,framesPrepared:0,pcmPrepared:0,completedCycles:0,done:false,metaPackets:this.meta.length};this.position=0;this.phaseIndex=0;this.channel=0;this.group=0;this.groupFrames=[];this.groupCursor=0;this.dataFramesSinceMeta=0;this.passStart=true;this.lastFrame=null;this.idleSent=false;
+  }
+  stats(){return{...this.s,trackId:this.manifest.trackId,hqMode:this.manifest.hqMode,cycles:this.cycles,radioRate:SAMPLE_RATE,frameSeconds:FRAME_SAMPLES/SAMPLE_RATE,previewSamplesPerFrame:CAPACITY};}
+  _notifyPass(kind,count){this.s={...this.s,kind,channel:kind==='preview'?0:this.channel,phase:kind==='preview'?0:this.manifest.phaseOrder[this.phaseIndex],sourceSamples:0,totalSamples:count};this.onPass(this.stats());}
+  _beginMetadata(resume){this.resumeStage=resume;this.stage='metadata';this.metaCursor=0;}
+  _nextHQPass(){
+   this.position=0;this.group=0;this.groupFrames=[];this.groupCursor=0;this.passStart=true;
+   if(++this.channel>=this.manifest.channels){this.channel=0;this.phaseIndex++;}
+   if(this.phaseIndex>=this.manifest.phaseCount){this.s.completedCycles++;if(this.cycles&&this.s.completedCycles>=this.cycles){this.stage='idle';return;}this.s.cycle=(this.s.cycle+1)>>>0;this.phaseIndex=0;this.channel=0;this.position=0;this._notifyPass('preview',this.manifest.previewFrames);this._beginMetadata('preview');}
+  }
+  _pcmPhase(startStep,count){
+   const phase=this.manifest.phaseOrder[this.phaseIndex],p=this.track.planes[this.channel],out=new Uint8Array(count*this.bps);for(let i=0;i<count;i++){const sample=phase+(startStep+i)*this.manifest.phaseCount,at=sample*this.bps;for(let b=0;b<this.bps;b++)out[i*this.bps+b]=p[at+b];}return out;
+  }
+  _analogPhase(startStep,count){const p=this._pcmPhase(startStep,count);if(this.bps===1)return p;const out=new Uint8Array(count),view=new DataView(p.buffer,p.byteOffset,p.byteLength);for(let i=0;i<count;i++)out[i]=clip(Math.round(128+view.getInt16(i*2,true)/256),0,255);return out;}
+  nextFrame(){
+   if(this.s.done)return null;let rgba,kind,pass=null;
+   for(let guard=0;guard<10000;guard++){
+    if(this.stage==='warmup'){kind='warmup';rgba=C.patternRGBA(MODE);if(--this.warmupLeft===0){this._notifyPass('preview',this.manifest.previewFrames);this._beginMetadata('preview');}break;}
+    if(this.stage==='metadata'){const frames=this.meta.slice(this.metaCursor,this.metaCursor+4);this.metaCursor+=frames.length;rgba=encodePacketFrame(frames);kind='metadata';if(this.metaCursor>=this.meta.length){this.stage=this.resumeStage;this.dataFramesSinceMeta=0;}break;}
+    if(['preview','hq'].includes(this.stage)&&this.dataFramesSinceMeta>=this.metadataEvery){this._beginMetadata(this.stage);continue;}
+    if(this.stage==='preview'){
+     if(this.position>=this.manifest.previewFrames){this.stage='hq';this.position=0;this.phaseIndex=0;this.channel=0;this.passStart=true;continue;}
+     const count=Math.min(CAPACITY,this.manifest.previewFrames-this.position);rgba=encodePreviewFrame(this.track.preview.subarray(this.position,this.position+count),{trackId:this.manifest.trackId,start:this.position,previewRate:this.manifest.previewRate,previewFrames:this.manifest.previewFrames,cycle:this.s.cycle});kind='preview';this.position+=count;this.s.sourceSamples=this.position;this.dataFramesSinceMeta++;break;
+    }
+    if(this.stage==='hq'){
+     const phase=this.manifest.phaseOrder[this.phaseIndex],total=phaseLength(this.manifest.frames,phase,this.manifest.phaseCount);
+     if(!total){this._nextHQPass();continue;}
+     if(this.passStart){this._notifyPass('hq-'+this.manifest.hqMode,total);this.passStart=false;
+      if(this.manifest.hqMode==='exact'){const h=protectedHeader({trackId:this.manifest.trackId,kind:2,channel:this.channel,phase,phaseCount:this.manifest.phaseCount,startStep:0,count:total,rate:this.manifest.targetRate,cycle:this.s.cycle,sampleBits:this.manifest.targetBits,totalFrames:this.manifest.frames});rgba=encodePacketFrame([h,h,h,h]);kind='hq-pass';this.dataFramesSinceMeta++;break;}
+     }
+     if(this.manifest.hqMode==='analog'){
+      if(this.position>=total){this._nextHQPass();continue;}
+      const count=Math.min(CAPACITY,total-this.position);rgba=encodeApproxFrame(this._analogPhase(this.position,count),{trackId:this.manifest.trackId,channel:this.channel,phase,phaseCount:this.manifest.phaseCount,startStep:this.position,targetRate:this.manifest.targetRate,frameCount:this.manifest.frames,cycle:this.s.cycle,sampleBits:this.manifest.targetBits});kind='hq-analog';this.position+=count;this.s.sourceSamples=this.position;this.dataFramesSinceMeta++;break;
+     }
+     const frames=[];
+     while(frames.length<4){
+      if(this.groupCursor>=this.groupFrames.length){const startStep=this.group*BLOCK/this.bps;if(startStep>=total)break;const count=Math.min(BLOCK/this.bps,total-startStep),data=this._pcmPhase(startStep,count);this.groupFrames=D.encodeGeneration(data,{type:0,transferId:this.manifest.trackId,generation:encodeKey(this.channel,phase,this.group),redundancy:this.manifest.fecPercent}).frames;this.groupCursor=0;this.group++;}
+      frames.push(this.groupFrames[this.groupCursor++]);
+     }
+     if(!frames.length){this._nextHQPass();continue;}
+     rgba=encodePacketFrame(frames);kind='hq-exact';this.s.sourceSamples=Math.min(total,this.group*BLOCK/this.bps);this.dataFramesSinceMeta++;break;
+    }
+    if(this.stage==='idle'){rgba=encodePacketFrame([]);kind='idle';this.stage='done';this.idleSent=true;break;}
+    if(this.stage==='done'){this.s.done=true;this.onProgress(this.stats());return null;}
+   }
+   if(!rgba)throw Error('Sender state did not yield a frame');
+   this.s.framesPrepared++;const wave=waveRGBA(rgba);this.s.pcmPrepared+=wave.length;pass=this.stats();this.lastFrame={wave,rgba,kind,pass};this.onFrame(this.lastFrame);this.onProgress(pass);return this.lastFrame;
+  }
+  async nextWave(){const f=this.nextFrame();return f?f.wave:null;}
+ }
+ class Receiver{
+  constructor(options={}){this.options=options;this.onManifest=options.onManifest||(()=>{});this.onPreview=options.onPreview||(()=>{});this.onHQApprox=options.onHQApprox||(()=>{});this.onHQExact=options.onHQExact||(()=>{});this.onPass=options.onPass||(()=>{});this.onProgress=options.onProgress||(()=>{});this.onError=options.onError||(()=>{});this.maxInflight=integer(options.maxInflight??MAX_INFLIGHT,1,1024,'maxInflight');this.reset();}
+  reset(){this.manifest=null;this.metaCandidates=new Map();this.groups=new Map();this.done=new Map();this.lastPassKey=null;this.s={frames:0,protectedPackets:0,metadataPackets:0,previewSamples:0,approxSamples:0,exactSamples:0,exactBlocks:0,duplicates:0,foreign:0,invalidPackets:0,evictedGenerations:0,conflictingHeaders:0,callbackErrors:0};this.decoder=new C.Decoder({mode:MODE,onFrame:(_rgba,info)=>{if(!info.signalLoss)this._frame();}});}
+  stats(){return{...this.s,trackId:this.manifest?.trackId??null,hqMode:this.manifest?.hqMode??null,activeGenerations:this.groups.size,radioSamples:this.decoder.totalSamples,missingRadioSamples:this.decoder.totalMissing,previewEstimated:true,analogHQEstimated:true};}
+  _call(callback,value){try{callback(value);return true;}catch(e){this.s.callbackErrors++;try{this.onError(e);}catch(_){}return false;}}
+  _frame(){
+   this.s.frames++;let decoded;
+   try{decoded=decodeImage(this.decoder.y,this.decoder.yValid);}catch(e){this.s.invalidPackets++;this._call(this.onError,e);return;}
+   this.s.protectedPackets+=decoded.packets.length;if(decoded.conflictingHeaders)this.s.conflictingHeaders++;
+   for(const p of decoded.packets)if(p.type===1){try{this._metadata(p);}catch(e){this.s.invalidPackets++;this._call(this.onError,e);}}
+   const h=decoded.header;
+   if(h){try{this._analog(h,decoded.analog);}catch(e){this.s.invalidPackets++;this._call(this.onError,e);}}
+   for(const p of decoded.packets)if(p.type===0){try{this._exact(p);}catch(e){this.s.invalidPackets++;this._call(this.onError,e);}}
+   this._call(this.onProgress,this.stats());
+  }
+  _metadata(p){
+   this.s.metadataPackets++;if(this.manifest?.trackId===p.transferId)return;
+   if(!Number.isSafeInteger(p.generation)||p.generation<0||p.generation>=Math.ceil(MAX_METADATA/BLOCK))return;
+   let candidate=this.metaCandidates.get(p.transferId);if(!candidate){if(this.metaCandidates.size>=2)this.metaCandidates.delete(this.metaCandidates.keys().next().value);candidate={groups:new Map(),parts:new Map()};this.metaCandidates.set(p.transferId,candidate);}
+   if(candidate.parts.has(p.generation))return;
+   let group=candidate.groups.get(p.generation);if(!group){group={k:p.k,n:p.n,shards:new Map()};candidate.groups.set(p.generation,group);}
+   if(group.k!==p.k||group.n!==p.n||group.shards.has(p.index))return;group.shards.set(p.index,p);
+   if(group.shards.size>=p.k){candidate.parts.set(p.generation,D.recoverGeneration([...group.shards.values()]));candidate.groups.delete(p.generation);}
+   const first=candidate.parts.get(0);if(!first)return;const length=new DataView(first.buffer,first.byteOffset,first.byteLength).getUint32(0,true);if(length<2||length+4>MAX_METADATA)throw Error('Invalid metadata envelope');const parts=Math.ceil((length+4)/BLOCK);for(let i=0;i<parts;i++)if(!candidate.parts.has(i))return;
+   const envelope=new Uint8Array(parts*BLOCK);for(let i=0;i<parts;i++)envelope.set(candidate.parts.get(i),i*BLOCK);
+   const raw=JSON.parse(decoder.decode(envelope.subarray(4,length+4))),manifest=normalizeManifest(raw);if(manifest.trackId!==p.transferId)throw Error('Metadata track identity mismatch');
+   this.manifest=manifest;this.groups.clear();this.done.clear();this.lastPassKey=null;this.metaCandidates.clear();this._call(this.onManifest,manifest);
+  }
+  _pass(h){const kind=h.kind===0?'preview':h.kind===1?'hq-analog':'hq-exact',key=[kind,h.cycle,h.channel,h.phase].join(':');if(this.lastPassKey!==key){this.lastPassKey=key;this._call(this.onPass,{kind,channel:h.channel,phase:h.phase,cycle:h.cycle,sourceSamples:h.startStep,totalSamples:h.kind===0?h.totalFrames:phaseLength(h.totalFrames,h.phase,h.phaseCount)});}}
+  _analog(h,body){
+   const m=this.manifest;if(!m||h.trackId!==m.trackId){this.s.foreign++;return;}
+   if(h.kind===0){if(h.channel!==0||h.phase!==0||h.phaseCount!==1||h.rate!==m.previewRate||h.totalFrames!==m.previewFrames||h.startStep+h.count>m.previewFrames||!body)return;this._pass(h);this.s.previewSamples+=body.valid.reduce((n,v)=>n+v,0);this._call(this.onPreview,{start:h.startStep,values:body.values,values0to255:body.values,valid:body.valid,cycle:h.cycle,estimated:true});return;}
+   if(h.channel>=m.channels||h.phaseCount!==m.phaseCount||h.phase>=m.phaseCount||h.rate!==m.targetRate||h.totalFrames!==m.frames||h.sampleBits!==m.targetBits)return;
+   if(h.kind===2){if(m.hqMode==='exact'&&h.startStep===0&&h.count===phaseLength(m.frames,h.phase,m.phaseCount))this._pass(h);return;}
+   if(m.hqMode!=='analog'||!body||h.startStep+h.count>phaseLength(m.frames,h.phase,m.phaseCount))return;
+   this._pass(h);this.s.approxSamples+=body.valid.reduce((n,v)=>n+v,0);this._call(this.onHQApprox,{channel:h.channel,phase:h.phase,startStep:h.startStep,values:body.values,values0to255:body.values,valid:body.valid,cycle:h.cycle,estimated:true});
+  }
+  _exact(p){
+   const m=this.manifest;if(!m||m.trackId!==p.transferId){this.s.foreign++;return;}if(m.hqMode!=='exact')return;
+   const key=decodeKey(p.generation),{channel,phase,block}=key;if(channel>=m.channels||phase>=m.phaseCount)return;
+   const bps=m.targetBits/8,total=phaseLength(m.frames,phase,m.phaseCount)*bps,start=block*BLOCK;if(start>=total)return;
+   const take=Math.min(BLOCK,total-start),expectedK=Math.ceil(take/36),expectedN=expectedK+Math.ceil(expectedK*m.fecPercent/100);if(p.k!==expectedK||p.n!==expectedN)return;
+   const stream=channel*16+phase;let bitmap=this.done.get(stream);if(!bitmap){bitmap=new Uint8Array(Math.ceil(total/BLOCK));this.done.set(stream,bitmap);}if(bitmap[block]){this.s.duplicates++;return;}
+   let group=this.groups.get(p.generation);
+   if(!group){if(this.groups.size>=this.maxInflight){let victim=null,least=Infinity;for(const [id,e]of this.groups){if(e.shards.size<least){victim=id;least=e.shards.size;}}this.groups.delete(victim);this.s.evictedGenerations++;}group={k:p.k,n:p.n,shards:new Map()};this.groups.set(p.generation,group);}
+   if(group.k!==p.k||group.n!==p.n)return;if(group.shards.has(p.index)){this.s.duplicates++;return;}group.shards.set(p.index,p);
+   if(group.shards.size<p.k)return;const recovered=D.recoverGeneration([...group.shards.values()]).slice(0,take);this.groups.delete(p.generation);
+   if(this._call(this.onHQExact,{channel,phase,startStep:start/bps,bytes:recovered,verifiedBlock:true})){bitmap[block]=1;this.s.exactBlocks++;this.s.exactSamples+=recovered.length/bps;}
+  }
+  feedBytes(pcm){this.decoder.feedBytes(pcm);}
+  feedGap(n){integer(n,0,Number.MAX_SAFE_INTEGER,'gap');if(n<=384)this.decoder.feedMissing(n);else this.decoder.skipMissing(n);}
+  finish(){return this.stats();}
+ }
+ return Object.freeze({MODE,WIDTH,HEIGHT,FRAME_SAMPLES,SAMPLE_RATE,FRAME_SECONDS:FRAME_SAMPLES/SAMPLE_RATE,PREVIEW_CAPACITY:CAPACITY,HQ_BYTES_PER_FRAME:144,BLOCK,STRIDE,
+  encodePreviewFrame,encodeApproxFrame,encodePacketFrame,waveRGBA,decodeImage,metadataFrames,createSender:(track,options)=>new Sender(track,options),createReceiver:options=>new Receiver(options),Sender,Receiver});
+}
+return Object.freeze({MODE,WIDTH,HEIGHT,FRAME_SAMPLES,SAMPLE_RATE,PREVIEW_CAPACITY:CAPACITY,BLOCK,STRIDE,phaseOrder,phaseLength,encodeKey,decodeKey,normalizeManifest,createTransport});
+});
+
+;
+/* Worker runtime: preparation, radio reconstruction and audio rendering stay off the UI thread. */
+'use strict';
+const A=globalThis.FastWAVAudio,D=globalThis.CBDataV1,C=globalThis.CBAnalogV8;
+const wire=globalThis.FastWAVCore.createTransport(C,D),Hash=globalThis.CBDataTransfer.SHA256;
+const send=(type,data={},transfer=[])=>postMessage({type,...data},transfer);
+const hash=bytes=>new Hash().update(bytes).hex();
+const RX_MEMORY_BUDGET=256*1024*1024;
+const receiverMemory=(manifest,hqMode=manifest.hqMode||'analog')=>({...A.estimateReconstruction(manifest,{hqMode}),budgetBytes:RX_MEMORY_BUDGET});
+function memoryMessage(info){return 'Réception impossible : '+Math.ceil(info.requiredBytes/1048576)+' Mio nécessaires pour cet extrait, budget '+Math.floor(info.budgetBytes/1048576)+' Mio. Choisir un extrait plus court ou une cadence inférieure.';}
+let source=null,sourceId=0,sourceNextCycle=0,role='rx',received=null,receivedManifest=null,verified=false,verificationFailed=false,receptionFrozen=false,exporting=false;
+let incomingAllowed=false,rejection=null;
+let lastIndex=null,statsAt=0,renderTail=null,renderNext=null,sourceEpoch=0,receiver,receivedPass=null,previewPeaks=new Float32Array(256),previewBins=new Uint8Array(256);
+let txEpoch=0,txRunning=false,txSender=null,txSent=0,txMaxLate=0,txLastPass=null,txJob=null;
+let ackId=0;const acknowledgements=new Map();
+function memoryError(error){send('error',{code:error.code,memoryInfo:error.memoryInfo,message:error.code==='RX_MEMORY_BUDGET'&&error.memoryInfo?memoryMessage(error.memoryInfo):error.message||String(error)});}
+function resetReceived(){received=null;receivedManifest=null;verified=false;verificationFailed=false;incomingAllowed=false;rejection=null;lastIndex=null;renderTail=null;renderNext=null;receivedPass=null;previewPeaks=new Float32Array(256);previewBins=new Uint8Array(256);}
+function verify(){
+ if(!received||verified||verificationFailed)return;
+ let planes;try{planes=received.getExactPlanes({copy:false});}catch(_){return;}
+ if(!receivedManifest.targetHashes||receivedManifest.targetHashes.length!==planes.length){verificationFailed=true;send('error',{message:'Empreintes PCM cible absentes : aucune validation finale.'});return;}
+ const hashes=planes.map(hash);verified=hashes.every((h,i)=>h===receivedManifest.targetHashes[i]);
+ if(verified)verified=received.verifyExact(receivedManifest.targetHashes,hash);
+ if(!verified){verificationFailed=true;send('error',{message:'SHA-256 PCM différent : le son ne sera pas déclaré vérifié.'});}
+ else send('verified',{hashes,manifest:receivedManifest});
+}
+function report(force=false){
+ const time=performance.now();if(!force&&time-statsAt<250)return;statsAt=time;verify();
+ send('stats',{receiver:received?received.stats():null,manifest:receivedManifest,rejection,verified,verificationFailed,frozen:receptionFrozen,waveform:previewPeaks,waveformValid:previewBins,wire:receiver?.stats?{...receiver.stats(),pass:receivedPass}:null,tx:{running:txRunning,sentSamples:txSent,maxLateMs:txMaxLate,pass:txLastPass,sender:txSender?.stats?.()||null}});
+}
+receiver=wire.createReceiver({
+ onManifest:manifest=>{
+  incomingAllowed=false;
+  if(receivedManifest?.trackId===manifest.trackId){incomingAllowed=true;rejection=null;report(true);return;}
+  let info,next;
+  try{info=receiverMemory(manifest);if(info.requiredBytes>info.budgetBytes)throw Object.assign(Error(memoryMessage(info)),{code:'RX_MEMORY_BUDGET'});next=new A.ProgressiveAudio({manifest,maxMemoryBytes:RX_MEMORY_BUDGET});}
+  catch(error){rejection={manifest,requiredBytes:info?.requiredBytes??null,budgetBytes:RX_MEMORY_BUDGET,message:info&&info.requiredBytes>info.budgetBytes?memoryMessage(info):'Impossible d’allouer la mémoire nécessaire à la réception de cet extrait.'};send('receiverRejected',rejection);report(true);return;}
+  resetReceived();receivedManifest=manifest;received=next;incomingAllowed=true;send('manifest',{manifest,memoryInfo:info});report(true);
+ },
+ onPreview:event=>{if(received&&incomingAllowed){received.ingestPreview(event.start,event.values,event.valid,event.cycle);for(let i=0;i<event.values.length;i++){if(event.valid&&!event.valid[i])continue;const bin=Math.min(255,Math.floor((event.start+i)*256/receivedManifest.previewFrames));previewPeaks[bin]=Math.max(previewPeaks[bin],Math.abs((event.values[i]-128)/128));previewBins[bin]=1;}report();}},
+ onHQApprox:event=>{if(received&&incomingAllowed){received.ingestApproxHQ(event.channel,event.phase,event.startStep,event.values,event.valid,event.cycle);report();}},
+ onHQExact:event=>{if(received&&incomingAllowed){received.ingestHQ(event.channel,event.phase,event.startStep,event.bytes);report();}},
+ onPass:pass=>{receivedPass=pass;},onProgress:()=>report(),onError:error=>memoryError(error)
+});
+function feed(index,bytes){
+ if(role!=='rx'||receptionFrozen||exporting)return;
+ if(lastIndex!==null){const distance=(index-lastIndex)>>>0;if(distance>=0x80000000)return;if(distance>0){if(distance<120000*60)receiver.feedGap(distance);else{receiver.reset();send('warning',{message:'Discontinuité série : resynchronisation, observations audio conservées.'});}}}
+ receiver.feedBytes(bytes);lastIndex=(index+bytes.length)>>>0;report();
+}
+function requestWrite(bytes){
+ const id=++ackId;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{acknowledgements.delete(id);reject(Error('Écriture USB sans réponse'));},3000);acknowledgements.set(id,{resolve,reject,timer});send('txChunk',{id,bytes},[bytes.buffer]);});
+}
+const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function runTX(options){
+ if(!source)throw Error('Préparer une musique avant TX');
+ const memoryInfo=receiverMemory(source.manifest,options.hqMode||'analog');
+ if(memoryInfo.requiredBytes>memoryInfo.budgetBytes)throw Object.assign(Error(memoryMessage(memoryInfo)),{code:'RX_MEMORY_BUDGET',memoryInfo});
+ const epoch=++txEpoch;txRunning=true;txSent=0;txMaxLate=0;
+ txSender=wire.createSender(source,{trackId:sourceId,hqMode:options.hqMode,fecPercent:options.fecPercent,cycles:0,initialCycle:sourceNextCycle,onPass:event=>{sourceNextCycle=(event.cycle+1)>>>0;txLastPass=event;send('txPass',{pass:event});},onProgress:()=>report()});
+ let frame=null,offset=0;const queue=[];let filling=null;
+ async function fill(){if(filling)return filling;filling=(async()=>{while(queue.length<2&&txRunning&&epoch===txEpoch){const next=await txSender.nextWave();if(!next)throw Error('La boucle TX s’est terminée prématurément');queue.push(next);}})();try{await filling;}finally{filling=null;}}
+ async function pcm(count){const out=new Uint8Array(count);let at=0;while(at<count&&txRunning&&epoch===txEpoch){if(!frame||offset>=frame.length){if(!queue.length)await fill();if(!queue.length)break;frame=queue.shift();offset=0;void fill().catch(error=>{if(epoch===txEpoch){txRunning=false;memoryError(error);send('txStopRequested');}});}const take=Math.min(count-at,frame.length-offset);out.set(frame.subarray(offset,offset+take),at);at+=take;offset+=take;}return out;}
+ try{
+  await fill();await requestWrite(await pcm(12000));txSent+=12000;
+  let start=performance.now(),sent=0;
+  while(txRunning&&epoch===txEpoch){
+   const due=start+sent*1000/120000,wait=due-performance.now();if(wait>1)await delay(Math.min(wait,25));if(!txRunning||epoch!==txEpoch)break;
+   const late=Math.max(0,performance.now()-due);txMaxLate=Math.max(txMaxLate,late);
+   if(late>120)throw Error('Cadence TX suspendue ('+Math.round(late)+' ms) : émission arrêtée pour préserver le flux.');
+   const block=await pcm(2400),count=block.length;if(!txRunning||epoch!==txEpoch)break;await requestWrite(block);sent+=count;txSent+=count;report();
+  }
+ }catch(error){if(epoch===txEpoch)throw error;}finally{if(epoch===txEpoch)txRunning=false;send('txStopped',{epoch});report(true);}
+}
+function renderAudio(message){
+ if(!received)throw Error('Aucune musique reçue');
+ const frames=Math.max(128,Math.min(16384,message.frames|0)),rate=message.outputRate||48000,mode=message.mode||'auto';
+ if(mode==='verified'&&!verified)throw Error('Le PCM cible n’est pas encore vérifié');
+ const targetRate=receivedManifest.targetRate,position=message.positionSeconds*targetRate,step=targetRate/rate,first=Math.floor(position),needed=Math.ceil((frames+512)*step)+2;
+ const channels=received.renderChannels(first,needed,{mode}),out=[new Float32Array(frames+512),new Float32Array(frames+512)];
+ for(let ch=0;ch<2;ch++)for(let i=0;i<frames+512;i++){const point=position-first+i*step,k=Math.floor(point),a=channels[Math.min(ch,channels.length-1)]||channels[0];out[ch][i]=a&&k>=0&&k<a.length?(a[k]*(1-(point-k))+(a[k+1]||0)*(point-k)):0;}
+ if(renderTail&&renderNext!==null&&Math.abs(message.positionSeconds-renderNext)<1/rate)for(let ch=0;ch<2;ch++)for(let i=0;i<512;i++){const t=i/512;out[ch][i]=renderTail[ch][i]*(1-t)+out[ch][i]*t;}
+ renderTail=out.map(a=>a.slice(frames));renderNext=message.positionSeconds+frames/rate;
+ const left=out[0].slice(0,frames),right=out[1].slice(0,frames);
+ send('audio',{requestId:message.requestId,left,right,positionSeconds:message.positionSeconds,end:message.positionSeconds>=receivedManifest.duration},[left.buffer,right.buffer]);
+}
+let exportEpoch=0,exportPending=null;
+function exportWrite(token,chunk,progress){return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{exportPending=null;reject(Error('Écriture WAV interrompue'));},15000);exportPending={token,resolve,reject,timer};send('exportChunk',{token,chunk,progress},[chunk.buffer]);});}
+async function exportAudio(options){
+ if(!received)throw Error('Aucune musique reçue');if(options.mode==='verified'&&!verified)throw Error('PCM cible non vérifié');
+ const token=++exportEpoch,bits=options.bits===8?8:16,channelCount=['mono','preview'].includes(options.mode)?1:receivedManifest.channels,rate=receivedManifest.targetRate,frames=receivedManifest.frameCount??receivedManifest.frames;
+ const totalBytes=frames*channelCount*(bits/8);if(totalBytes>0xffffffff-36)throw Error('Ce WAV dépasse la limite RIFF standard');
+ const header=new Uint8Array(44),view=new DataView(header.buffer),text=(at,s)=>{for(let i=0;i<s.length;i++)header[at+i]=s.charCodeAt(i);};
+ text(0,'RIFF');view.setUint32(4,36+totalBytes+(totalBytes&1),true);text(8,'WAVE');text(12,'fmt ');view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,channelCount,true);view.setUint32(24,rate,true);view.setUint32(28,rate*channelCount*bits/8,true);view.setUint16(32,channelCount*bits/8,true);view.setUint16(34,bits,true);text(36,'data');view.setUint32(40,totalBytes,true);
+ if(exporting)throw Error('Export déjà actif');exporting=true;send('exportStart',{token,header,totalBytes:totalBytes+44+(totalBytes&1),verified},[header.buffer]);
+ try{
+ for(let at=0;at<frames;at+=16384){if(token!==exportEpoch)throw Error('Export annulé');const count=Math.min(16384,frames-at),channels=received.renderChannels(at,count,{mode:options.mode||'auto'}),chunk=new Uint8Array(count*channelCount*bits/8),v=new DataView(chunk.buffer);for(let i=0;i<count;i++)for(let ch=0;ch<channelCount;ch++){const x=Math.max(-1,Math.min(1,channels[ch]?.[i]||0)),p=(i*channelCount+ch)*bits/8;if(bits===8)chunk[p]=Math.max(0,Math.min(255,Math.round(x*128+128)));else v.setInt16(p,Math.max(-32768,Math.min(32767,Math.round(x*32768))),true);}await exportWrite(token,chunk,(at+count)/frames);}
+ if(totalBytes&1)await exportWrite(token,Uint8Array.of(0),1);send('exportEnd',{token});
+ }finally{exporting=false;receiver.reset();lastIndex=null;report(true);}
+}
+onmessage=async event=>{
+ const m=event.data||{};
+ try{
+  if(m.type==='prepare'||m.type==='prepareWav'){
+   const rawBytes=m.type==='prepareWav'?m.bytes.byteLength:0,budget=(m.options?.maxMemoryBytes||256*1024*1024)-rawBytes;if(budget<=0)throw Error('Le WAV dépasse le budget de préparation');
+   const parsed=m.type==='prepareWav'?A.parseWav(new Uint8Array(m.bytes),{maxMemoryBytes:budget}):null;
+   const channels=parsed?parsed.channels:m.channels.map(buffer=>new Float32Array(buffer));send('preparing');const track=A.prepareAudio(channels,parsed?parsed.sampleRate:m.sourceRate,{...m.options,maxMemoryBytes:budget,maxReceiverMemoryBytes:RX_MEMORY_BUDGET});
+   track.manifest.targetHashes=track.planes.map(hash);track.manifest.previewHash=hash(track.preview);track.manifest.title=m.title||'Musique';
+   if(m.sourceRange)Object.assign(track.manifest,m.sourceRange);
+   const waveform=new Float32Array(512);for(let i=0;i<512;i++){let peak=0;for(let k=Math.floor(i*track.preview.length/512);k<Math.floor((i+1)*track.preview.length/512);k++)peak=Math.max(peak,Math.abs((track.preview[k]-128)/128));waveform[i]=peak;}
+   send('prepared',{requestId:m.requestId,track,waveform,memoryInfo:receiverMemory(track.manifest,m.options?.hqMode||'analog')},[track.preview.buffer,...track.planes.map(p=>p.buffer),waveform.buffer]);
+  }else if(m.type==='loadTrack'){source=m.track;sourceId=m.trackId>>>0;sourceNextCycle=0;sourceEpoch++;send('loaded',{manifest:source.manifest,trackId:sourceId,memoryInfo:receiverMemory(source.manifest,source.memoryInfo?.hqMode||'analog')});}
+  else if(m.type==='setTrackId'){if(txRunning)throw Error('Changement de piste pendant TX');sourceId=m.trackId>>>0;sourceNextCycle=0;}
+  else if(m.type==='role'){role=m.role;}
+  else if(m.type==='pcm')feed(m.index,new Uint8Array(m.bytes));
+  else if(m.type==='startTx'){if(txRunning)throw Error('TX déjà actif');txJob=runTX(m.options||{});txJob.catch(error=>{memoryError(error);send('txStopRequested');});}
+  else if(m.type==='stopTx'){txRunning=false;txEpoch++;for(const p of acknowledgements.values()){clearTimeout(p.timer);p.reject(Error('TX arrêté'));}acknowledgements.clear();send('txStopped');report(true);}
+  else if(m.type==='txAck'){const p=acknowledgements.get(m.id);if(p){clearTimeout(p.timer);acknowledgements.delete(m.id);m.error?p.reject(Error(m.error)):p.resolve();}}
+  else if(m.type==='reset'){if(exporting)throw Error('Terminer l’export avant de réinitialiser');receiver.reset();resetReceived();receptionFrozen=false;send('reset');report(true);}
+  else if(m.type==='serialReset'){receiver.reset();incomingAllowed=false;lastIndex=null;}
+  else if(m.type==='freeze'){receptionFrozen=!!m.value;if(!receptionFrozen){receiver.reset();lastIndex=null;}report(true);}
+  else if(m.type==='render')renderAudio(m);
+  else if(m.type==='export')void exportAudio(m.options||{}).catch(memoryError);
+  else if(m.type==='cancelExport'){exportEpoch++;if(exportPending){clearTimeout(exportPending.timer);exportPending.reject(Error('Export annulé'));exportPending=null;}}
+  else if(m.type==='exportAck'){if(exportPending&&m.token===exportPending.token){const p=exportPending;exportPending=null;clearTimeout(p.timer);m.error?p.reject(Error(m.error)):p.resolve();}}
+  else if(m.type==='stats')report(true);
+ }catch(error){send('error',{requestId:m.requestId,code:error.code,memoryInfo:error.memoryInfo,message:error.code==='RX_MEMORY_BUDGET'&&error.memoryInfo?memoryMessage(error.memoryInfo):error.message||String(error)});}
+};
+send('ready');
+
+</script>
+<script>
+/* Fixed 1.5 Mbaud transport. Byte parser retained from validated TVv5. */
+(function(root){
+'use strict';
+const RATE=120000;
+class ByteParser{
+ constructor(onFrame,onLine,onReady,controlExpected=()=>false){
+  this.rest=new Uint8Array(0);this.onFrame=onFrame;this.onLine=onLine;this.onReady=onReady;
+  this.controlExpected=controlExpected;
+  this.wireVersion=null;this.expectedIndex=null;this.seeking=false;
+  this.stats={packets:0,crcErrors:0,shortPackets:0,badHeaders:0,resyncs:0,discardedBytes:0};
+ }
+ setWireVersion(version){this.wireVersion=version;this.expectedIndex=null;}
+ static crc32(bytes,start,length){
+  if(!this.crcTable){this.crcTable=new Uint32Array(256);for(let i=0;i<256;i++){let c=i;for(let bit=0;bit<8;bit++)c=(c>>>1)^((c&1)?0xEDB88320:0);this.crcTable[i]=c>>>0;}}
+  let crc=0xFFFFFFFF;for(let i=start;i<start+length;i++)crc=(crc>>>8)^this.crcTable[(crc^bytes[i])&255];
+  return (crc^0xFFFFFFFF)>>>0;
+ }
+ header(data,at,version=3){
+  if(at+10>data.length||data[at]!==77||data[at+1]!==80||data[at+2]!==88||data[at+3]!==48+version)return null;
+  const view=new DataView(data.buffer,data.byteOffset+at,10),index=view.getUint32(4,true),strength=view.getUint16(8,true);
+  return strength<=30000?{index,strength}:null;
+ }
+ forward(before,after,minimum=128){const difference=(after-before)>>>0;return difference>=minimum&&difference<RATE*20;}
+ plausible(index){if(this.expectedIndex===null)return true;const difference=(index-this.expectedIndex)>>>0;return difference===0||difference<RATE*20;}
+ control(data,at){
+  if(data[at]===239&&data[at+1]===239&&data[at+2]===239&&data[at+3]===239)return {length:4,ready:true};
+  let prefix;if(data[at]===79)prefix=[79,75,32];else if(data[at]===69)prefix=[69,82,82,32];else return null;
+  if(at+prefix.length>data.length)return null;
+  for(let i=0;i<prefix.length;i++)if(data[at+i]!==prefix[i])return null;
+  for(let end=at+prefix.length;end<Math.min(data.length,at+150);end++){
+   if(data[end]===10||data[end]===13)return {length:end-at+(data[end]===13&&data[end+1]===10?2:1),line:new TextDecoder().decode(data.subarray(at,end))};
+   if(data[end]<32||data[end]>126)return null;
+  }
+  return null;
+ }
+ terminalControl(data,at,maximum){
+  for(let candidate=at+10;candidate<=Math.min(data.length-4,at+maximum);candidate++){
+   const control=this.control(data,candidate);
+   if(control&&candidate+control.length===data.length&&this.controlExpected(control.ready?'ready':'line',control.line)){
+    // Firmware precedes READY with a complete zero boundary. A run of 0xEF
+    // in ordinary PCM cannot be used as an early legacy packet boundary.
+    if(control.ready&&(candidate<138||!data.subarray(candidate-138,candidate).every(byte=>byte===0)))continue;
+    return candidate;
+   }
+  }
+  return -1;
+ }
+ emit(data,at,header){
+  if(this.seeking){this.stats.resyncs++;this.seeking=false;}
+  this.stats.packets++;this.expectedIndex=(header.index+128)>>>0;
+  this.onFrame(header.index,header.strength,data.subarray(at+10,at+138));
+ }
+ discard(count){this.stats.discardedBytes+=count;this.seeking=true;}
+ feed(chunk){
+  let data;if(this.rest.length){data=new Uint8Array(this.rest.length+chunk.length);data.set(this.rest);data.set(chunk,this.rest.length);}else data=chunk;
+  let at=0;
+  while(at<data.length){
+   const c=data[at];
+   if(c===77){
+    const available=data.length-at;
+    if(available<4&&[77,80,88].slice(0,available).every((b,i)=>data[at+i]===b))break;
+    const version=data[at+1]===80&&data[at+2]===88?data[at+3]-48:0;
+    if((version===3||version===4)&&(this.wireVersion===null||version===this.wireVersion)){
+     if(available<10)break;
+     const header=this.header(data,at,version);
+     if(version===4){
+      if(available<142)break;
+      const expected=new DataView(data.buffer,data.byteOffset+at+138,4).getUint32(0,true);
+      if(ByteParser.crc32(data,at,138)!==expected){this.stats.crcErrors++;this.discard(1);at++;continue;}
+      if(!header){this.stats.badHeaders++;this.discard(142);at+=142;continue;}
+      if(this.expectedIndex!==null&&((header.index-this.expectedIndex)>>>0)>=0x80000000){this.stats.badHeaders++;this.discard(142);at+=142;continue;}
+      // The CRC covers the index too. No unverified index reaches the raster.
+      this.emit(data,at,header);at+=142;continue;
+     }
+     if(!header||!this.plausible(header.index)){this.stats.badHeaders++;this.discard(1);at++;continue;}
+     const next=this.header(data,at+138);
+     if(next&&this.forward(header.index,next.index)){
+      this.emit(data,at,header);at+=138;continue;
+     }
+     const boundary=this.control(data,at+138);
+     if(boundary){this.emit(data,at,header);at+=138;continue;}
+     if(available!==138){
+      const terminal=this.terminalControl(data,at,552);
+      if(terminal>=0){if(terminal-at<138)this.stats.shortPackets++;else this.stats.badHeaders++;this.discard(terminal-at);at=terminal;continue;}
+     }
+     if(available<138)break;
+     // Confirm a replacement boundary with its following packet. Merely
+     // finding "MPX3" inside PCM is not enough to discard a healthy packet.
+     let replacement=-1;
+     const limit=Math.min(data.length-148,at+552);
+     for(let candidate=at+1;candidate<=limit;candidate++){
+      const h=this.header(data,candidate),following=this.header(data,candidate+138);
+      if(h&&following&&this.plausible(h.index)&&this.forward(h.index,following.index)){replacement=candidate;break;}
+     }
+     if(replacement>=0){
+      const distance=replacement-at;
+      // A healthy packet can precede an unreadable header. Preserve it only
+      // when there is no earlier confirmed shortened-packet boundary.
+      const later=this.header(data,at+276);
+      let earlyBoundary=false;
+      for(let candidate=at+10;candidate<at+138&&candidate+10<=data.length;candidate++){
+       const early=this.header(data,candidate);
+       if(early&&this.forward(header.index,early.index)){earlyBoundary=true;break;}
+      }
+      if(!earlyBoundary&&distance>=276&&later&&this.forward(header.index,later.index,256)){
+       this.emit(data,at,header);at+=138;continue;
+      }
+      if(distance<138)this.stats.shortPackets++;else this.stats.badHeaders++;
+      this.discard(distance);at=replacement;continue;
+     }
+     if(available<562)break;
+     this.stats.badHeaders++;this.discard(1);at++;continue;
+    }
+   }
+   // CR and LF may arrive in separate USB chunks. Both are legitimate line
+   // delimiters, not evidence of a serial loss or a resynchronization.
+   if(c===10||c===13){at++;continue;}
+   const control=this.control(data,at);
+   if(control){
+    if(control.ready)this.onReady();else{if(/^OK RX /.test(control.line))this.expectedIndex=null;this.onLine(control.line);}
+    at+=control.length;continue;
+   }
+   if((c===239&&data.length-at<4)||((c===79||c===69)&&data.length-at<150&&data.subarray(at).every(b=>b>=32&&b<=126)))break;
+   this.discard(1);at++;
+  }
+  this.rest=data.slice(at);
+ }
+ finish(){
+  // Only an exactly aligned complete legacy tail may be committed at EOF.
+  // MPX4 packets are already committed immediately after CRC validation.
+  if(this.rest.length===138&&(this.wireVersion===null||this.wireVersion===3)){
+   const header=this.header(this.rest,0);
+   if(header&&this.plausible(header.index))this.emit(this.rest,0,header);
+   else this.discard(this.rest.length);
+  }else if(this.rest.length)this.discard(this.rest.length);
+  this.rest=new Uint8Array(0);
+ }
+}
+const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+class Session{
+ constructor({onPCM=()=>{},onLog=()=>{},onState=()=>{},onError=()=>{}}={}){
+  this.onPCM=onPCM;this.onLog=onLog;this.onState=onState;this.onError=onError;
+  this.state='off';this.pending=[];this.port=null;this.writer=null;this.reader=null;this.closing=false;this.readTask=null;this.readyWait=null;this.generation=0;
+  this.parser=new ByteParser((index,strength,bytes)=>{if(this.state==='rx')this.onPCM(index,bytes.slice(),strength);},line=>this.line(line),()=>this.ready(),(kind,line)=>kind==='ready'?this.state==='keying':this.pending.some(p=>p.test(line)||/^ERR /.test(line)));
+ }
+ change(state){this.state=state;this.onState(state);}
+ line(line){
+  this.onLog(line);
+  for(const p of [...this.pending])if(p.test(line)){clearTimeout(p.timer);this.pending=this.pending.filter(x=>x!==p);p.resolve(line);}
+  if(/^ERR /.test(line)){const error=Error(line);for(const p of this.pending){clearTimeout(p.timer);p.reject(error);}this.pending=[];if(this.readyWait){this.readyWait.reject(error);this.readyWait=null;}this.onError(error);}
+ }
+ ready(){if(this.state==='keying'&&this.readyWait){this.readyWait.resolve();this.readyWait=null;}}
+ async write(bytes){if(!this.writer||this.closing)throw Error('Port série indisponible');if(typeof bytes!=='string'&&this.state!=='tx')throw Error('PCM hors émission active');if(typeof bytes==='string'&&this.state==='tx')throw Error('Commande interdite dans le flux PCM');await this.writer.write(typeof bytes==='string'?new TextEncoder().encode(bytes):bytes);}
+ fault(error){if(this.closing||this.state==='off')return;for(const p of this.pending){clearTimeout(p.timer);p.reject(error);}this.pending=[];if(this.readyWait){this.readyWait.reject(error);this.readyWait=null;}this.change('fault');this.onError(error);}
+ async command(command,test,timeout=4000){
+  let item;const promise=new Promise((resolve,reject)=>{item={test,resolve,reject,timer:setTimeout(()=>{this.pending=this.pending.filter(x=>x!==item);reject(Error('Délai de réponse série dépassé : '+command.trim()));},timeout)};this.pending.push(item);});
+  try{return(await Promise.all([this.write(command.endsWith('\n')?command:command+'\n'),promise]))[1];}finally{clearTimeout(item.timer);this.pending=this.pending.filter(x=>x!==item);}
+ }
+ async readLoop(){
+  try{while(!this.closing&&this.port?.readable){const reader=this.port.readable.getReader();this.reader=reader;try{while(!this.closing){const {value,done}=await reader.read();if(done){if(!this.closing)this.fault(Error('Lecture USB terminée'));return;}if(value?.length)this.parser.feed(value);}}finally{reader.releaseLock();this.reader=null;}}}
+  catch(error){if(!this.closing)this.fault(error);}finally{this.parser.finish();}
+ }
+ async connect(port,{frequency=2442312500,fine=0}={}){
+  if(this.state!=='off')throw Error('Déconnecter la radio avant de changer la configuration');
+  if(!Number.isSafeInteger(frequency)||frequency<2401000000||frequency>2482500000||!Number.isInteger(fine)||Math.abs(fine)>50000)throw Error('Réglages RF invalides');
+  const generation=++this.generation;let opened=false;
+  const current=()=>{if(generation!==this.generation||this.closing||this.state!=='connecting')throw Error('Connexion annulée');};
+  this.closing=false;this.change('connecting');this.port=port;
+  try{
+   await port.open({baudRate:1500000,dataBits:8,stopBits:1,parity:'none',flowControl:'none',bufferSize:65536});
+   opened=true;if(generation!==this.generation||this.closing){try{await port.close();}catch(_){}opened=false;throw Error('Connexion annulée');}
+   if(port.setSignals)await port.setSignals({dataTerminalReady:false,requestToSend:false});
+   if(generation!==this.generation||this.closing)throw Error('Connexion annulée');
+   this.writer=port.writable.getWriter();this.readTask=this.readLoop();
+   await sleep(180);current();let identified=false,lastError;
+   for(let i=0;i<3&&!identified;i++){current();try{await this.command('STOP',s=>s==='OK STOP',1600);current();await this.command('STATUS',s=>/^OK STATUS CB_FM_STEREO /.test(s),1600);current();identified=true;}catch(error){current();lastError=error;await sleep(120);current();}}
+   if(!identified)throw lastError||Error('ESP non identifié à 1,5 Mbaud');
+   current();await this.command('WIRE 4',s=>s==='OK WIRE 4');current();this.parser.setWireVersion(4);
+   await this.command('PACE 150000',s=>s==='OK PACE 150000');current();
+   await this.command(`RX ${frequency} HQ ${fine}`,s=>/^OK RX \d+ 120000 HQ$/.test(s),5500);current();
+   this.change('rx');return this;
+  }catch(error){if(generation===this.generation)await this.disconnect();throw error;}
+ }
+ async arm(apwr=63){
+  if(this.state!=='rx')throw Error('La radio doit être connectée avant TX');
+  if(!Number.isInteger(apwr)||apwr<0||apwr>191)throw Error('APWR invalide');
+  this.change('keying');let timer;
+  const ready=new Promise((resolve,reject)=>{timer=setTimeout(()=>{this.readyWait=null;reject(Error('READY radio absent'));},4000);this.readyWait={resolve,reject};});
+  try{await Promise.all([this.write(`TX ${apwr}\n`),ready]);if(this.state!=='keying')throw Error('Démarrage TX annulé');this.change('tx');}
+  catch(error){this.readyWait=null;if(!this.closing&&this.state==='keying'){this.change('stopping');await sleep(330);if(!this.closing&&this.state==='stopping')this.change('rx');}throw error;}
+  finally{clearTimeout(timer);}
+ }
+ async stop(){
+  if(!['tx','keying','stopping'].includes(this.state))return;
+  const generation=this.generation;
+  this.change('stopping');if(this.readyWait){this.readyWait.reject(Error('TX annulé'));this.readyWait=null;}
+  // Firmware returns to RX after the PCM stream ends; do not inject ASCII into PCM.
+  await sleep(360);if(generation===this.generation&&!this.closing&&this.state==='stopping')this.change('rx');
+ }
+ async disconnect(){
+  if(this.closing)return;this.generation++;this.closing=true;this.change('closing');
+  for(const p of this.pending){clearTimeout(p.timer);p.reject(Error('Déconnecté'));}this.pending=[];
+  if(this.readyWait){this.readyWait.reject(Error('Déconnecté'));this.readyWait=null;}
+  try{await this.reader?.cancel();}catch(_){}
+  try{await this.readTask;}catch(_){}
+  try{this.writer?.releaseLock();}catch(_){}this.writer=null;
+  try{if(this.port?.readable||this.port?.writable)await this.port.close();}catch(_){}
+  this.port=null;this.readTask=null;this.closing=false;this.parser=new ByteParser((i,s,b)=>{if(this.state==='rx')this.onPCM(i,b.slice(),s);},l=>this.line(l),()=>this.ready(),(k,l)=>k==='ready'?this.state==='keying':this.pending.some(p=>p.test(l)||/^ERR /.test(l)));
+  this.change('off');
+ }
+}
+root.FastWAVSerial=Object.freeze({ByteParser,Session,BAUD:1500000});
+if(typeof module!=='undefined'&&module.exports)module.exports=root.FastWAVSerial;
+})(typeof globalThis!=='undefined'?globalThis:this);
+
+;
+/* Progressive PCM playback. Local files use a bounded AudioBufferSource queue;
+ * secure web origins prefer AudioWorklet. Neither backend exports or buffers a whole song. */
+(function(root){'use strict';
+const workletSource=`class FastWAVOutput extends AudioWorkletProcessor {
+ constructor(){super();this.L=new Float32Array(32768);this.R=new Float32Array(32768);this.r=0;this.w=0;this.n=0;this.run=false;this.started=false;this.pending=false;this.final=false;this.epoch=0;this.played=0;this.missing=0;this.tick=0;this.port.onmessage=e=>{const m=e.data;if(m.type==='reset'){this.r=this.w=this.n=0;this.epoch=m.epoch;this.run=m.run;this.started=false;this.pending=false;this.final=false;this.played=0;this.missing=0;}else if(m.type==='data'&&m.epoch===this.epoch){this.pending=false;for(let i=0;i<m.left.length&&this.n<this.L.length;i++){this.L[this.w]=m.left[i];this.R[this.w]=m.right[i];this.w=(this.w+1)%this.L.length;this.n++;}this.final=!!m.final;}else if(m.type==='failed'&&m.epoch===this.epoch){this.run=false;this.pending=false;}};}
+ process(inputs,outputs){const o=outputs[0];if(!o||!o.length)return true;const l=o[0],r=o[1]||o[0];l.fill(0);if(r!==l)r.fill(0);if(this.run){if(!this.pending&&!this.final&&this.n<16384){this.pending=true;this.port.postMessage({type:'need',epoch:this.epoch});}if(!this.started&&(this.n>=4096||this.final))this.started=true;if(this.started){let gap=false;for(let i=0;i<l.length;i++){if(this.n){l[i]=this.L[this.r];r[i]=this.R[this.r];this.r=(this.r+1)%this.L.length;this.n--;this.played++;}else if(this.final){this.run=false;this.port.postMessage({type:'ended',epoch:this.epoch,played:this.played});break;}else gap=true;}if(gap)this.missing++;}if(++this.tick%32===0)this.port.postMessage({type:'position',epoch:this.epoch,played:this.played,missing:this.missing});}return true;}
+}registerProcessor('fastwav-output',FastWAVOutput);`;
+class Player{
+ constructor(worker,callbacks={},options={}){this.worker=worker;this.callbacks=callbacks;this.options=options;this.context=null;this.node=null;this.gain=null;this.initializing=null;this.backend=null;this.initIssue=null;this.epoch=0;this.position=0;this.next=0;this.duration=0;this.mode='auto';this.volume=.7;this.playing=false;this.pendingPlay=false;this.requests=new Map();this.id=0;this.sources=new Set();this.bufferAt=0;this.bufferStarted=false;this.missing=0;this.startTimer=null;}
+ _timer(fn,ms){const id=root.setTimeout(fn,ms);id?.unref?.();return id;}
+ _clear(id){if(id!==null&&id!==undefined)root.clearTimeout(id);}
+ _bounded(task,ms,message){return new Promise((resolve,reject)=>{const timer=this._timer(()=>reject(Error(message)),ms);Promise.resolve(task).then(value=>{this._clear(timer);resolve(value);},error=>{this._clear(timer);reject(error);});});}
+ _status(message){this.callbacks.onStatus?.(message);}
+ _selectBuffer(reason){if(!this.context?.createBuffer||!this.context?.createBufferSource)throw Error('Lecture compatible indisponible : '+reason);if(this.node){try{this.node.disconnect();}catch(_){}this.node.port.onmessage=null;this.node.onprocessorerror=null;this.node=null;}this.backend='buffer';this.initIssue=reason;this.callbacks.onBackend?.({backend:this.backend,reason});}
+ async init(){if(this.backend&&this.context?.state!=='closed')return;if(this.initializing)return this.initializing;this.initializing=(async()=>{const Context=root.AudioContext||root.webkitAudioContext;if(!Context)throw Error('AudioContext indisponible');const context=new Context({sampleRate:48000});this.context=context;try{this.gain=context.createGain();this.gain.gain.value=this.volume;this.gain.connect(context.destination);context.onstatechange=()=>{if(this.playing&&context.state!=='running')this.callbacks.onWarning?.('Lecture audio suspendue par le navigateur');};const local=root.location?.protocol==='file:'||root.location?.origin==='null';if(local){this._selectBuffer('Le fichier local utilise la lecture compatible : les modules AudioWorklet blob peuvent être bloqués sur cette origine.');return;}try{if(!context.audioWorklet||typeof root.AudioWorkletNode!=='function')throw Error('AudioWorklet indisponible');this._status('Chargement du moteur audio…');const url=URL.createObjectURL(new Blob([workletSource],{type:'text/javascript'}));try{await this._bounded(context.audioWorklet.addModule(url),this.options.moduleTimeoutMs||4000,'Délai de chargement AudioWorklet dépassé');}finally{URL.revokeObjectURL(url);}const node=new root.AudioWorkletNode(context,'fastwav-output',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2]});node.connect(this.gain);this.node=node;this.backend='worklet';this.initIssue=null;node.port.onmessage=e=>this.message(e.data);node.onprocessorerror=()=>{if(this.node===node)this._recoverWorklet('Le moteur AudioWorklet a cessé de fonctionner.');};this.callbacks.onBackend?.({backend:this.backend,reason:null});}catch(error){this._selectBuffer(error.message||String(error));}}catch(error){try{await context.close();}catch(_){}this.context=this.node=this.gain=null;this.backend=null;throw error;}})();try{return await this.initializing;}finally{this.initializing=null;}}
+ async play(position=this.position){const epoch=++this.epoch;this.pendingPlay=true;this._clearRequests();this._clear(this.startTimer);this.startTimer=null;this._stopSources();try{this._status('Démarrage audio…');const initialization=this.init();let resume;try{resume=this.context?this.context.resume():Promise.resolve();}catch(error){resume=Promise.reject(error);}/* resume is invoked before the first await, while the click is still active. */await Promise.all([initialization,this._bounded(resume,this.options.resumeTimeoutMs||5000,'Le navigateur bloque le démarrage audio. Cliquer de nouveau sur Écouter.')]);if(epoch!==this.epoch)return;if(this.context.state!=='running')throw Error('Le navigateur n’a pas démarré la sortie audio. Cliquer de nouveau sur Écouter.');if(!Number.isFinite(this.duration)||this.duration<=0)throw Error('Aucune durée audio à lire');this.position=Math.max(0,Math.min(this.duration,Number.isFinite(position)?position:0));if(this.position>=this.duration)this.position=0;this.next=this.position;this.origin=this.position;this.missing=0;this.playing=true;this.bufferAt=this.context.currentTime+.035;this.bufferStarted=false;if(this.backend==='worklet'){this.node.port.postMessage({type:'reset',run:true,epoch});this.startTimer=this._timer(()=>{if(epoch===this.epoch&&this.playing)this._recoverWorklet('Le moteur AudioWorklet ne demande aucun échantillon.');},this.options.startTimeoutMs||3000);}else this._pumpBuffer();this.callbacks.onState?.(true);}catch(error){if(epoch===this.epoch){this.playing=false;this._clearRequests();this._stopSources();}throw error;}finally{if(epoch===this.epoch)this.pendingPlay=false;}}
+ _clearRequests(){for(const p of this.requests.values())this._clear(p.timer);this.requests.clear();}
+ _stopSources(){for(const r of this.sources){r.source.onended=null;try{r.source.stop();}catch(_){}try{r.source.disconnect();}catch(_){}}this.sources.clear();}
+ _bufferPosition(){const now=this.context?.currentTime||0;let p=this.position;for(const r of this.sources){if(now>=r.end)p=Math.max(p,r.position+r.frames/this.context.sampleRate);else if(now>=r.start)p=Math.max(p,r.position+(now-r.start));}return Math.min(this.duration,p);}
+ pause(){const was=this.playing||this.pendingPlay;if(this.playing&&this.backend==='buffer')this.position=this._bufferPosition();this.playing=false;this.pendingPlay=false;this.epoch++;this._clearRequests();this._clear(this.startTimer);this.startTimer=null;this.node?.port.postMessage({type:'reset',run:false,epoch:this.epoch});this._stopSources();if(was)this.callbacks.onState?.(false);}
+ seek(position){const was=this.playing||this.pendingPlay;this.pause();this.position=Math.max(0,Math.min(this.duration,Number.isFinite(position)?position:0));this.callbacks.onPosition?.(this.position,0);if(was)void this.play(this.position).catch(e=>this.callbacks.onError?.(e));}
+ quality(mode){this.mode=mode;if(this.playing||this.pendingPlay)this.seek(this.playing&&this.backend==='buffer'?this._bufferPosition():this.position);}
+ setVolume(value){this.volume=Number.isFinite(value)?Math.max(0,Math.min(1,value)):this.volume;if(this.gain)this.gain.gain.setTargetAtTime(this.volume,this.context.currentTime,.015);}
+ _fail(error){this.pause();this.callbacks.onError?.(error);}
+ _recoverWorklet(reason){if(this.backend!=='worklet')return;const was=this.playing,position=this.position;this.pause();try{this._selectBuffer(reason);this.callbacks.onWarning?.(reason+' Passage à la lecture compatible.');if(was)void this.play(position).catch(e=>this.callbacks.onError?.(e));}catch(error){this.callbacks.onError?.(error);}}
+ _requestBlock(){if(!this.playing||this.requests.size)return false;const frames=Math.max(0,Math.min(8192,Math.ceil((this.duration-this.next)*this.context.sampleRate-1e-7)));if(!frames)return false;const requestId='play-'+(++this.id),epoch=this.epoch,p={epoch,position:this.next,frames,timer:null};this.requests.set(requestId,p);this.next+=frames/this.context.sampleRate;p.timer=this._timer(()=>{if(this.requests.get(requestId)===p&&epoch===this.epoch)this._fail(Error('Le navigateur ne reçoit pas les blocs de lecture audio.'));},this.options.renderTimeoutMs||5000);this.worker.postMessage({type:'render',requestId,positionSeconds:p.position,frames,outputRate:this.context.sampleRate,mode:this.mode});return true;}
+ _pumpBuffer(){if(this.playing&&this.backend==='buffer'&&this.sources.size<3)this._requestBlock();}
+ _scheduleBuffer(p,left,right){const context=this.context,buffer=context.createBuffer(2,p.frames,context.sampleRate);buffer.getChannelData(0).set(left);buffer.getChannelData(1).set(right);const source=context.createBufferSource();source.buffer=buffer;source.connect(this.gain);const earliest=context.currentTime+.015;if(this.bufferStarted&&this.bufferAt<earliest)this.missing++;const start=Math.max(this.bufferAt,earliest),end=start+p.frames/context.sampleRate,record={source,start,end,position:p.position,frames:p.frames,epoch:p.epoch,final:p.position+p.frames/context.sampleRate>=this.duration-1e-9};this.bufferAt=end;this.bufferStarted=true;this.sources.add(record);source.onended=()=>{if(!this.sources.delete(record)||record.epoch!==this.epoch||!this.playing)return;try{source.disconnect();}catch(_){}this.position=Math.min(this.duration,record.position+record.frames/context.sampleRate);this.callbacks.onPosition?.(this.position,this.missing);if(record.final){this.playing=false;this._clearRequests();this._stopSources();this.callbacks.onState?.(false);}else this._pumpBuffer();};source.start(start);this._pumpBuffer();}
+ message(m){if(m.epoch!==this.epoch||!this.playing||this.backend!=='worklet')return;if(m.type==='need'){this._clear(this.startTimer);this.startTimer=null;if(!this._requestBlock()&&!this.requests.size)this.node.port.postMessage({type:'data',epoch:this.epoch,left:new Float32Array(0),right:new Float32Array(0),final:true});}else if(m.type==='position'||m.type==='ended'){this.position=Math.min(this.duration,this.origin+m.played/this.context.sampleRate);this.callbacks.onPosition?.(this.position,m.missing||0);if(m.type==='ended'){this.playing=false;this._clearRequests();this._clear(this.startTimer);this.startTimer=null;this.callbacks.onState?.(false);}}}
+ receive(m){const p=this.requests.get(m.requestId);if(!p)return typeof m.requestId==='string'&&m.requestId.startsWith('play-')&&['audio','error'].includes(m.type);if(!['audio','error'].includes(m.type))return false;this.requests.delete(m.requestId);this._clear(p.timer);if(p.epoch!==this.epoch||!this.playing)return true;if(m.type==='error'){this._fail(Error(m.message));}else{if(!(m.left instanceof Float32Array)||!(m.right instanceof Float32Array)||m.left.length<p.frames||m.right.length<p.frames){this._fail(Error('Bloc audio incomplet'));return true;}const left=m.left.length===p.frames?m.left:m.left.slice(0,p.frames),right=m.right.length===p.frames?m.right:m.right.slice(0,p.frames);try{if(this.backend==='buffer')this._scheduleBuffer(p,left,right);else this.node.port.postMessage({type:'data',epoch:this.epoch,left,right,final:p.position+p.frames/this.context.sampleRate>=this.duration-1e-9},[left.buffer,right.buffer]);}catch(error){this._fail(error);}}return true;}
+}
+root.FastWAVPlayer={Player,workletSource};if(typeof module!=='undefined'&&module.exports)module.exports=root.FastWAVPlayer;
+})(typeof globalThis!=='undefined'?globalThis:this);
+
+;
+(function(){'use strict';
+const $=id=>document.getElementById(id),workerSource=$('fastwav-worker').textContent;
+function makeWorker(){const u=URL.createObjectURL(new Blob([workerSource],{type:'text/javascript'}));const w=new Worker(u);URL.revokeObjectURL(u);return w;}
+const worker=makeWorker();let prepWorker=null,session=null,connecting=false,txBusy=false,stopping=false,preparing=false,prepared=null,preparedMemory=null,manifest=null,rejectedTrack=null,file=null,fileInfo=null,fileURL=null,frozen=false,exportState=null,job=0,connectJob=0,txJob=0,trackId=0,lastConfig='',rxBytes=0,txBytes=0,lastRx=0,lastTx=0,lastRate=performance.now();
+const log=(s)=>{const box=$('log');box.textContent=(new Date().toLocaleTimeString()+' '+s+'\n'+box.textContent).slice(0,11000);};
+const status=(id,s,error=false)=>{$(id).textContent=s;$(id).classList.toggle('error',error);};
+const fail=e=>{const s=e.message||String(e);log(s);status('status',s,true);};
+const time=s=>{s=Math.max(0,s||0);return Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');};
+const bytes=n=>n<1024?Math.round(n)+' o':n<1048576?(n/1024).toFixed(1)+' ko':(n/1048576).toFixed(2)+' Mo';
+const memoryBytes=n=>(n/1048576).toLocaleString('fr-CA',{maximumFractionDigits:1})+' Mio';
+function receptionMemory(){if(!preparedMemory)return null;const requiredBytes=preparedMemory[$('hqMode').value==='exact'?'exactBytes':'analogBytes'],budgetBytes=preparedMemory.budgetBytes;if(!Number.isFinite(requiredBytes)||!Number.isFinite(budgetBytes))return null;return{requiredBytes,budgetBytes,fits:requiredBytes<=budgetBytes};}
+function receptionFits(){return receptionMemory()?.fits!==false;}
+function memoryDescription(){const m=receptionMemory();if(!m)return '';const exactFits=$('hqMode').value==='analog'&&Number.isFinite(preparedMemory.exactBytes)&&preparedMemory.exactBytes<=m.budgetBytes;return 'Mémoire estimée du récepteur : '+memoryBytes(m.requiredBytes)+' / '+memoryBytes(m.budgetBytes)+(m.fits?'.':' — dépassement. '+(exactFits?'Le mode PCM vérifié tient dans ce budget ('+memoryBytes(preparedMemory.exactBytes)+'), avec un débit radio plus lent. Sinon, choisir':'Choisir')+' un extrait plus court ou une cadence plus basse, puis préparer à nouveau.');}
+function preparedDescription(){if(!prepared)return;status('preparedInfo',prepared.title+' · '+time(prepared.duration)+' · '+prepared.targetRate+' Hz / '+prepared.targetBits+' bits · '+prepared.channels+' voie(s). '+memoryDescription(),!receptionFits());}
+const player=new FastWAVPlayer.Player(worker,{onPosition:(p,n)=>{$('seek').value=p;$('playTime').textContent=time(p)+' / '+time(player.duration);$('underruns').textContent=n;},onState:()=>controls(),onStatus:s=>status('playStatus',s),onWarning:s=>status('playStatus',s,true),onError:e=>{status('playStatus',e.message,true);log('Lecture audio : '+e.message);controls();}});
+function controls(){const connected=session?.state==='rx',active=txBusy||['tx','keying','stopping'].includes(session?.state),tx=$('role').value==='tx';$('connect').disabled=!!session||connecting;$('disconnect').disabled=!session;$('role').disabled=!!session||connecting;$('frequency').disabled=!!session;$('fine').disabled=!!session;$('apwr').disabled=active;$('prepare').disabled=!file||preparing||active||!tx;$('cancelPrepare').disabled=!preparing;$('startTx').disabled=!connected||!prepared||!receptionFits()||preparing||active||!tx;$('stopTx').disabled=!active||stopping;for(const id of ['file','start','end','targetRate','targetBits','channels','previewRate','phases','hqMode','fec'])$(id).disabled=active||preparing;$('play').disabled=!manifest||player.playing||player.pendingPlay;$('pause').disabled=!player.playing&&!player.pendingPlay;$('freeze').disabled=!manifest||!!exportState;$('export').disabled=!manifest||!!exportState;$('resetRx').disabled=!!exportState;$('quality').disabled=!!exportState;$('exportBits').disabled=!!exportState;$('seek').disabled=!manifest;}
+function plot(id,peaks,valid){const canvas=$(id),c=canvas.getContext('2d'),w=canvas.width,h=canvas.height;c.clearRect(0,0,w,h);c.strokeStyle='#284150';c.beginPath();c.moveTo(0,h/2);c.lineTo(w,h/2);c.stroke();if(!peaks)return;const step=w/peaks.length;for(let i=0;i<peaks.length;i++){c.fillStyle=valid&&!valid[i]?'#653542':'#58d7bb';const amp=valid&&!valid[i]?h*.4:Math.min(1,peaks[i])*h*.43;c.fillRect(i*step,h/2-amp,Math.max(1,step*.8),Math.max(1,amp*2));}}
+function parseTime(s){const parts=String(s).trim().split(':');if(!parts.length||parts.length>3||parts.some(p=>!/^\d+(?:\.\d+)?$/.test(p)))throw Error('Temps invalide : utiliser mm:ss ou des secondes');return parts.reduce((a,p)=>a*60+Number(p),0);}
+async function inspectWav(f){const first=new Uint8Array(await f.slice(0,12).arrayBuffer()),chars=(a,p,n)=>String.fromCharCode(...a.slice(p,p+n));if(chars(first,0,4)!=='RIFF'||chars(first,8,4)!=='WAVE')return null;let at=12,fmt=null,data=null;while(at+8<=f.size){const b=new Uint8Array(await f.slice(at,at+8).arrayBuffer()),size=new DataView(b.buffer).getUint32(4,true),id=chars(b,0,4);if(at+8+size>f.size)throw Error('WAV tronqué');if(id==='fmt '){if(size<16||size>1024)throw Error('Format WAV non pris en charge');fmt=new Uint8Array(await f.slice(at+8,at+8+size).arrayBuffer());}if(id==='data')data={offset:at+8,size};if(fmt&&data)break;at+=8+size+(size&1);}if(!fmt||!data)throw Error('En-tête WAV incomplet');const v=new DataView(fmt.buffer),channels=v.getUint16(2,true),sampleRate=v.getUint32(4,true),block=v.getUint16(12,true),bits=v.getUint16(14,true);let tag=v.getUint16(0,true);if(tag===65534&&fmt.length>=40)tag=v.getUint16(24,true);if(![1,3].includes(tag)||![8,16,24,32].includes(bits)||(tag===3&&bits!==32)||channels<1||channels>8||sampleRate<1000||sampleRate>384000||block!==channels*bits/8)throw Error('WAV : utiliser PCM 8/16/24/32 bits ou float32, 1 à 8 voies');return {...data,tag,channels,sampleRate,block,bits,duration:Math.floor(data.size/block)/sampleRate};}
+function wavHeader(info,length){const a=new Uint8Array(44),v=new DataView(a.buffer),s=(p,t)=>{for(let i=0;i<t.length;i++)a[p+i]=t.charCodeAt(i);};s(0,'RIFF');v.setUint32(4,36+length+(length&1),true);s(8,'WAVE');s(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,info.tag,true);v.setUint16(22,info.channels,true);v.setUint32(24,info.sampleRate,true);v.setUint32(28,info.sampleRate*info.block,true);v.setUint16(32,info.block,true);v.setUint16(34,info.bits,true);s(36,'data');v.setUint32(40,length,true);return a;}
+function config(){return $('hqMode').value+'/'+Number($('fec').value);}
+function estimate(){if(!prepared)return;const m=prepared,preview=Math.ceil(m.previewFrames/1536)*.1584,frames=m.frameCount??m.frames,n=m.phaseCount||Number($('phases').value);let images=0;for(let p=0;p<n;p++)images+=Math.ceil(Math.max(0,Math.ceil((frames-p)/n))/1536);const hq=images*m.channels*.1584;$('txEstimate').textContent='Aperçu : environ '+preview.toFixed(1)+' s hors métadonnées et pertes. '+($('hqMode').value==='analog'?'Raffinement analogique : environ '+hq.toFixed(1)+' s/cycle, estimé.':'PCM exact : cadence utile maximale indicative '+Math.round(909/(1+Number($('fec').value)/100))+' o/s avant contrôles et pertes.')+' Les cycles continuent sans limite. '+memoryDescription();$('txEstimate').classList.toggle('error',!receptionFits());}
+async function selectFile(){const token=++job;prepared=null;preparedMemory=null;file=$('file').files[0]||null;const selected=file;fileInfo=null;if(fileURL)URL.revokeObjectURL(fileURL);fileURL=null;$('sourceInfo').textContent='';status('preparedInfo','Choisir les réglages puis préparer la musique.');if(selected){fileURL=URL.createObjectURL(selected);$('sourcePlayer').src=fileURL;try{const info=await inspectWav(selected);if(token!==job)return;fileInfo=info;if(fileInfo){$('sourceInfo').textContent=selected.name+' · '+time(fileInfo.duration)+' · '+fileInfo.sampleRate+' Hz · '+fileInfo.channels+' voie(s) · '+bytes(selected.size);$('end').value=String(Number(fileInfo.duration.toFixed(6)));}else $('sourceInfo').textContent=selected.name+' · '+bytes(selected.size)+' · décodage navigateur à la préparation';}catch(e){if(token!==job)return;fail(e);file=null;}}else $('sourcePlayer').removeAttribute('src');controls();}
+$('file').onchange=()=>void selectFile();$('sourcePlayer').onloadedmetadata=()=>{if(!fileInfo&&Number.isFinite($('sourcePlayer').duration))$('end').value=String(Number($('sourcePlayer').duration.toFixed(6)));};
+function cancelPrepare(){job++;prepWorker?.terminate();prepWorker=null;preparing=false;status('preparedInfo','Préparation annulée.');controls();}
+$('cancelPrepare').onclick=cancelPrepare;
+$('prepare').onclick=async()=>{const token=++job;preparing=true;prepared=null;preparedMemory=null;controls();status('preparedInfo','Lecture et préparation de l’extrait…');try{const start=parseTime($('start').value),end=parseTime($('end').value);if(end<=start)throw Error('La fin doit suivre le début');const options={startSeconds:0,endSeconds:end-start,targetRate:Number($('targetRate').value),targetBits:Number($('targetBits').value),previewRate:Number($('previewRate').value),channelMode:$('channels').value,phases:Number($('phases').value),hqMode:$('hqMode').value,maxReceiverMemoryBytes:256*1048576,maxMemoryBytes:256*1048576};let message,transfer=[];
+ if(fileInfo){const i=fileInfo;if(end>i.duration+1/i.sampleRate)throw Error('L’extrait dépasse la durée du fichier');const a=Math.floor(start*i.sampleRate),b=Math.min(Math.floor(end*i.sampleRate),Math.floor(i.size/i.block)),len=(b-a)*i.block;if(len+i.channels*(b-a)*4>160*1048576)throw Error('Cet extrait WAV dépasse le budget de préparation. Choisir une durée plus courte.');const pcm=new Uint8Array(await file.slice(i.offset+a*i.block,i.offset+b*i.block).arrayBuffer()),all=new Uint8Array(44+pcm.length+(pcm.length&1));all.set(wavHeader(i,pcm.length));all.set(pcm,44);options.endSeconds=(b-a)/i.sampleRate;message={type:'prepareWav',bytes:all.buffer};transfer=[all.buffer];}
+ else{if(file.size>96*1048576)throw Error('Fichier compressé trop volumineux pour le décodage navigateur. Utiliser un WAV pour lire un extrait directement.');const duration=$('sourcePlayer').duration;if(Number.isFinite(duration)&&duration*48000*2*4>160*1048576)throw Error('Décodage complet trop volumineux : convertir en WAV et sélectionner un extrait.');const Context=window.AudioContext||window.webkitAudioContext,context=new Context();let decoded;try{decoded=await context.decodeAudioData(await file.arrayBuffer());}finally{await context.close();}if(end>decoded.duration+.01)throw Error('L’extrait dépasse la durée du fichier');const a=Math.floor(start*decoded.sampleRate),b=Math.min(decoded.length,Math.floor(end*decoded.sampleRate)),channels=[];for(let c=0;c<decoded.numberOfChannels;c++)channels.push(decoded.getChannelData(c).slice(a,b));options.endSeconds=(b-a)/decoded.sampleRate;message={type:'prepare',channels:channels.map(a=>a.buffer),sourceRate:decoded.sampleRate};transfer=channels.map(a=>a.buffer);}
+ if(token!==job)return;prepWorker?.terminate();prepWorker=makeWorker();prepWorker.onerror=e=>{if(token===job){preparing=false;status('preparedInfo',e.message,true);controls();}};prepWorker.onmessage=e=>{const m=e.data;if(token!==job)return;if(m.type==='prepared'){prepared=m.track.manifest;preparedMemory=m.memoryInfo||null;trackId=crypto.getRandomValues(new Uint32Array(1))[0]||1;lastConfig=config();worker.postMessage({type:'loadTrack',track:m.track,trackId},[m.track.preview.buffer,...m.track.planes.map(a=>a.buffer)]);plot('sourceWave',m.waveform);preparedDescription();preparing=false;prepWorker.terminate();prepWorker=null;estimate();controls();}else if(m.type==='error'){preparing=false;status('preparedInfo',m.message,true);prepWorker.terminate();prepWorker=null;controls();}};prepWorker.postMessage({...message,options,title:file.name,sourceRange:{sourceStartSeconds:start,sourceEndSeconds:end},requestId:token},transfer);
+ }catch(e){if(token===job){preparing=false;status('preparedInfo',e.message,true);controls();}}};
+for(const id of ['targetRate','targetBits','channels','previewRate','phases','start','end'])$(id).addEventListener('change',()=>{prepared=null;preparedMemory=null;status('preparedInfo','Réglages modifiés : préparer à nouveau.');controls();});for(const id of ['hqMode','fec'])$(id).addEventListener('change',()=>{estimate();preparedDescription();controls();});
+$('role').onchange=()=>{worker.postMessage({type:'role',role:$('role').value});controls();};
+$('connect').onclick=async()=>{const token=++connectJob;let s=null;connecting=true;controls();try{if(!navigator.serial)throw Error('Web Serial indisponible : ouvrir ce fichier avec Chrome ou Edge');const port=await navigator.serial.requestPort();if(token!==connectJob)return;s=new FastWAVSerial.Session({onPCM:(index,data)=>{if(session!==s)return;rxBytes+=data.length;worker.postMessage({type:'pcm',index,bytes:data},[data.buffer]);},onLog:s=>log(s),onState:state=>{if(session!==s)return;status('status','Radio : '+state+' · 1 500 000 bauds');controls();},onError:e=>{if(session===s){void stopTX();fail(e);}}});session=s;worker.postMessage({type:'serialReset'});await s.connect(port,{frequency:Math.round(Number($('frequency').value)*1e6),fine:Number($('fine').value)});if(session===s&&token===connectJob)status('status','Radio connectée · '+($('role').value==='tx'?'prête à émettre':'réception active'));}catch(e){if(session===s&&s){try{await s.disconnect();}catch(_){}if(session===s)session=null;}if(token===connectJob&&e.name!=='NotFoundError'&&e.name!=='AbortError')fail(e);}finally{if(token===connectJob)connecting=false;controls();}};
+async function stopTX(){txJob++;if(stopping)return;stopping=true;const s=session;worker.postMessage({type:'stopTx'});controls();try{await s?.stop();status('txStatus','TX arrêté. La musique reçue est conservée.');}catch(e){fail(e);}finally{txBusy=false;stopping=false;controls();}}
+$('stopTx').onclick=()=>void stopTX();
+$('startTx').onclick=async()=>{if(txBusy||stopping||!prepared||session?.state!=='rx')return;if(!receptionFits()){preparedDescription();status('txStatus','Émission refusée avant armement : '+memoryDescription(),true);controls();return;}const token=++txJob;txBusy=true;controls();status('txStatus','Armement de la radio…');try{const fec=Number($('fec').value);if(!Number.isInteger(fec)||fec<0||fec>800)throw Error('FEC : choisir un entier de 0 à 800 %');if(config()!==lastConfig){trackId=crypto.getRandomValues(new Uint32Array(1))[0]||1;worker.postMessage({type:'setTrackId',trackId});lastConfig=config();}const s=session;await s.arm(Number($('apwr').value));if(token!==txJob||session!==s||s.state!=='tx')return;worker.postMessage({type:'startTx',options:{hqMode:$('hqMode').value,fecPercent:fec}});status('txStatus','Émission en boucle illimitée. Arrêter quand la version reçue vous convient.');}catch(e){if(token===txJob){fail(e);await stopTX();}}finally{if(token===txJob&&session?.state!=='tx')txBusy=false;controls();}};
+$('disconnect').onclick=async()=>{const s=session;if(!s)return;++connectJob;++txJob;connecting=false;worker.postMessage({type:'stopTx'});txBusy=false;try{await s.disconnect();}catch(e){fail(e);}finally{if(session===s){session=null;worker.postMessage({type:'serialReset'});status('status','Radio déconnectée. Réception audio conservée.');}controls();}};
+function showRejectedTrack(m){rejectedTrack=m;const info=m.manifest||{},description=(info.title||'Piste reçue')+' · '+time(info.duration)+' · '+(info.targetRate||'?')+' Hz / '+(info.targetBits||'?')+' bits · '+(info.channels||'?')+' voie(s)',memory=Number.isFinite(m.requiredBytes)&&Number.isFinite(m.budgetBytes)?' Mémoire demandée : '+memoryBytes(m.requiredBytes)+' pour un budget de '+memoryBytes(m.budgetBytes)+'.':'';const cause=Number.isFinite(m.requiredBytes)&&Number.isFinite(m.budgetBytes)&&m.requiredBytes>m.budgetBytes?'Budget mémoire dépassé.':m.message||'Le navigateur a refusé l’allocation audio.';const message='Réception refusée : '+description+'. '+cause+memory+' Raccourcir l’extrait ou baisser la cadence à l’émetteur, puis préparer à nouveau.';status('playStatus',message,true);log(message);if(!manifest){player.pause();player.duration=0;player.position=0;$('rxTitle').textContent=description;status('qualityBadge','Mémoire insuffisante pour cette piste',true);$('previewProgress').value=0;$('hqProgress').value=0;$('previewText').textContent='Aucune mémoire audio allouée.';$('hqText').textContent='En attente d’une piste compatible.';$('verifiedOption').disabled=true;$('seek').value=0;$('playTime').textContent='0:00 / '+time(info.duration);$('hashInfo').textContent='';plot('receivedWave');}else status('playStatus',message+' La piste précédente reste disponible.',true);controls();}
+function showManifest(m){if(rejectedTrack)status('playStatus','Réception démarrée : la piste peut maintenant être reconstruite.');rejectedTrack=null;manifest=m;status('qualityBadge','Piste reconnue · réception en cours');player.pause();if($('quality').value==='verified'){$('quality').value='auto';player.quality('auto');}$('verifiedOption').disabled=true;player.duration=m.duration;player.position=0;$('seek').max=m.duration;$('seek').value=0;$('rxTitle').textContent=m.title+' · '+time(m.duration)+' · '+m.targetRate+' Hz / '+m.targetBits+' bits · '+m.channels+' voie(s)';$('hashInfo').textContent='PCM cible : '+(m.targetHashes||[]).join(' / ');$('playTime').textContent='0:00 / '+time(m.duration);controls();}
+function fraction(s,field){const n=s?.[field];return Number.isFinite(n)?Math.max(0,Math.min(1,n)):0;}
+worker.onmessage=async e=>{const m=e.data;if(player.receive(m))return;
+ if(m.type==='txChunk'){const s=session;try{if(!s||s.state!=='tx'||stopping)throw Error('TX annulé');await s.write(m.bytes);txBytes+=m.bytes.length;worker.postMessage({type:'txAck',id:m.id});}catch(e){worker.postMessage({type:'txAck',id:m.id,error:e.message});}}
+ else if(m.type==='manifest')showManifest(m.manifest);
+ else if(m.type==='receiverRejected')showRejectedTrack(m);
+ else if(m.type==='loaded'){if(prepared&&m.trackId===trackId&&m.memoryInfo){preparedMemory=m.memoryInfo;preparedDescription();estimate();controls();}}
+ else if(m.type==='stats'){if(m.rejection&&(!rejectedTrack||rejectedTrack.manifest?.trackId!==m.rejection.manifest?.trackId||rejectedTrack.requiredBytes!==m.rejection.requiredBytes||rejectedTrack.budgetBytes!==m.rejection.budgetBytes))showRejectedTrack(m.rejection);else if(m.rejection===null&&rejectedTrack&&m.receiver){rejectedTrack=null;status('playStatus','Réception reprise : les améliorations continuent sur la piste conservée.');}if(m.manifest&&m.receiver&&!manifest)showManifest(m.manifest);const s=m.receiver,p=fraction(s,'previewCoverage'),exact=fraction(s,'exactCoverage'),approx=fraction(s,'approxCoverage');if(s||!rejectedTrack||manifest){$('previewProgress').value=p*100;$('previewText').textContent=(p*100).toFixed(1)+' %';$('hqProgress').value=Math.max(exact,approx)*100;$('hqText').textContent=(approx*100).toFixed(1)+' % estimés · '+(exact*100).toFixed(1)+' % PCM exact';$('qualityBadge').textContent=m.verified?'PCM cible vérifié SHA-256':m.verificationFailed?'Validation PCM échouée':s?.stableEstimated?'Stable estimé · fidélité non garantie':s?'Réception progressive · version estimée':'Aucune musique reçue';$('qualityBadge').classList.toggle('error',m.verificationFailed);$('verifiedOption').disabled=!m.verified;}frozen=m.frozen;$('freeze').textContent=frozen?'Reprendre les améliorations':'Figer cette version';$('jitter').textContent=(m.tx.maxLateMs||0).toFixed(1);const pass=m.wire?.pass||m.tx.pass;$('passes').textContent=pass?String(pass.cycle??0)+' / '+(pass.kind||''):'—';if(s&&m.waveform)plot('receivedWave',m.waveform,m.waveformValid);else if(!manifest)plot('receivedWave');}
+ else if(m.type==='txPass'){const p=m.pass;status('txStatus','Boucle '+(p.cycle+1)+' · '+p.kind+(p.channel!==undefined?' · voie '+(p.channel+1):'')+(p.phase!==undefined?' · phase '+p.phase:''));}
+ else if(m.type==='txStopRequested'){void stopTX();}
+ else if(m.type==='verified'){status('playStatus','Toutes les valeurs PCM cibles ont été reçues et vérifiées. La boucle TX continue.');}
+ else if(m.type==='error'){if(m.code==='RX_MEMORY_BUDGET'&&m.memoryInfo&&prepared){preparedMemory=m.memoryInfo;preparedDescription();estimate();controls();}status('playStatus',m.message,true);log(m.message);if(exportState){worker.postMessage({type:'cancelExport'});await closeExport(true);}}
+ else if(m.type==='warning'){log(m.message);}
+ else if(m.type==='reset'){manifest=null;rejectedTrack=null;player.pause();player.duration=0;status('qualityBadge','Aucune musique reçue');status('playStatus','Réception effacée. En attente d’une piste.');$('rxTitle').textContent='En attente d’une piste.';$('playTime').textContent='0:00 / 0:00';$('seek').value=0;$('previewProgress').value=0;$('hqProgress').value=0;$('previewText').textContent='0 %';$('hqText').textContent='0 % · estimées et vérifiées distinguées';plot('receivedWave');controls();}
+ else if(m.type==='exportStart'){if(!exportState){worker.postMessage({type:'cancelExport'});return;}const x=exportState;x.token=m.token;x.chain=x.writer?Promise.resolve().then(()=>x.writer.write(m.header)):Promise.resolve(x.chunks.push(m.header));x.chain.catch(()=>{});}
+ else if(m.type==='exportChunk'){const x=exportState;if(!x||x.token!==m.token){worker.postMessage({type:'exportAck',token:m.token,error:'Export annulé'});return;}try{await x.chain;if(x.writer)await x.writer.write(m.chunk);else{x.size+=m.chunk.length;if(x.size>64*1048576)throw Error('WAV trop volumineux pour téléchargement mémoire ; utiliser la destination directe');x.chunks.push(m.chunk);}status('playStatus','Export WAV : '+Math.round(m.progress*100)+' %');worker.postMessage({type:'exportAck',token:m.token});}catch(e){worker.postMessage({type:'exportAck',token:m.token,error:e.message});await closeExport(true);fail(e);}}
+ else if(m.type==='exportEnd'){if(exportState?.token===m.token)await closeExport(false);}
+};
+worker.onerror=e=>{fail(e);void stopTX();};
+$('play').onclick=()=>{player.mode=$('quality').value;status('playStatus','Démarrage du lecteur audio…');const task=player.play();controls();void task.then(()=>{if(player.playing){status('playStatus','Lecture : '+$('quality').selectedOptions[0].textContent+(player.backend==='buffer'?' · lecteur compatible local':''));if(player.initIssue)log('Lecture compatible : '+player.initIssue);}}).catch(e=>{status('playStatus','Lecture impossible : '+(e.message||String(e)),true);log('Lecture audio : '+(e.stack||e.message||String(e)));}).finally(controls);};$('pause').onclick=()=>player.pause();$('quality').onchange=()=>player.quality($('quality').value);$('seek').onchange=()=>player.seek(Number($('seek').value));$('volume').oninput=()=>player.setVolume(Number($('volume').value));$('freeze').onclick=()=>worker.postMessage({type:'freeze',value:!frozen});$('resetRx').onclick=()=>worker.postMessage({type:'reset'});
+async function closeExport(abort){const x=exportState;if(!x)return;exportState=null;try{await x.chain;}catch(e){abort=true;fail(e);}try{if(x.writer){if(abort)await x.writer.abort();else await x.writer.close();}else if(!abort){const url=URL.createObjectURL(new Blob(x.chunks,{type:'audio/wav'})),a=document.createElement('a');a.href=url;a.download=x.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);}}catch(e){abort=true;fail(e);if(x.writer)try{await x.writer.abort();}catch(_){}}status('playStatus',abort?'Export interrompu.':'WAV exporté depuis cette version.');controls();}
+$('export').onclick=async()=>{if(!manifest||exportState)return;const selected=manifest,mode=$('quality').value,bits=Number($('exportBits').value),name=(manifest.title||'FastWAV').replace(/\.[^.]+$/,'').replace(/[<>:"/\\|?*]/g,'_')+'-'+mode+'.wav',x={writer:null,chunks:[],size:44,name,chain:Promise.resolve()};exportState=x;controls();try{if(window.showSaveFilePicker){const handle=await showSaveFilePicker({suggestedName:name,types:[{description:'WAV audio',accept:{'audio/wav':['.wav']}}]}),writer=await handle.createWritable();if(exportState!==x||manifest!==selected){await writer.abort();if(exportState===x)exportState=null;status('playStatus','La piste a changé pendant le choix de destination. Relancer l’export.');controls();return;}x.writer=writer;}if(exportState!==x)return;worker.postMessage({type:'export',options:{mode,bits}});}catch(e){if(exportState===x)exportState=null;if(e.name!=='AbortError')fail(e);controls();}};
+setInterval(()=>{const now=performance.now(),dt=(now-lastRate)/1000;$('rxRate').textContent=((rxBytes-lastRx)/dt/1000).toFixed(1);$('txRate').textContent=((txBytes-lastTx)/dt/1000).toFixed(1);lastRx=rxBytes;lastTx=txBytes;lastRate=now;const s=session?.parser.stats;$('crc').textContent=s?.crcBad??s?.crcErrors??s?.badCrc??0;},1000);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)log('Page en arrière-plan : cadence surveillée ; une suspension reste possible.');});
+window.addEventListener('beforeunload',e=>{if(session||preparing){e.preventDefault();e.returnValue='';}});
+plot('sourceWave');plot('receivedWave');controls();log('ESP-FastWAV prêt. Traitement local, série fixée à 1,5 Mbaud.');
+})();
+
+</script>
+</body></html>
