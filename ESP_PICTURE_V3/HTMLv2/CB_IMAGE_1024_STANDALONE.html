@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CB-IMAGE/1024 · Analog Image Accumulator</title>
+<style>
+:root{color-scheme:dark;--bg:#090f17;--surface:#132030;--surface2:#192a3c;--line:#30465a;--text:#e4efff;--muted:#a2b9cd;--accent:#42ceb5;--warn:#ffd18a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;color:var(--text)}main{max-width:1580px;margin:auto;padding:18px 20px 42px}header{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:16px}h1,h2,h3{margin:0 0 10px}h1{font-size:1.7rem;letter-spacing:-.03em}h2{font-size:1.05rem}.eyebrow{font-size:.78rem;color:var(--accent);font-weight:800;text-transform:uppercase;letter-spacing:.08em}.sub{color:var(--muted);margin:2px 0}.badge{font-size:.79rem;color:#bbfff1;border:1px solid #33635e;border-radius:10px;padding:6px 9px;background:#102c31}.panel{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:15px;min-width:0}.grid{display:grid;grid-template-columns:1.02fr 1.08fr;gap:14px;align-items:start}.tools{display:grid;grid-template-columns:1fr 1.6fr 1fr 1fr 1fr;gap:12px;margin-bottom:12px;align-items:end}.field>label,.sliderlabel{display:block;color:var(--muted);font-weight:700;font-size:.77rem;margin-bottom:5px}.field input,.field select{display:block;width:100%;padding:9px 10px;border-radius:8px;border:1px solid #466077;background:#0b1726;color:var(--text);font:inherit;min-height:41px}button{background:#243a4c;border:1px solid #47657a;color:var(--text);font:600 .88rem system-ui;padding:9px 12px;border-radius:8px;cursor:pointer;min-height:40px}button:hover:not(:disabled){filter:brightness(1.2)}button:disabled{opacity:.43;cursor:not-allowed}.primary{background:#11675e;border-color:#209886}.danger{background:#653340;border-color:#9e5b66}.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.row button{flex:1}.status{background:#0a2731;border-left:3px solid var(--accent);padding:9px 12px;margin-top:12px;border-radius:5px}.status.error{background:#3c252e;border-color:#e67881}.hidden{display:none!important}.screen{width:100%;aspect-ratio:4/3;background:#000;border:1px solid var(--line);border-radius:9px;overflow:hidden;position:relative}.screen canvas{display:block;width:100%;height:100%;object-fit:contain;image-rendering:auto}.screenlabel{position:absolute;top:8px;left:8px;background:#000b;border-radius:5px;padding:3px 6px;font-size:.7rem}.details{color:var(--muted);font-size:.8rem;margin:8px 0 10px}.controls{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}.controlgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px 14px}.sliderlabel{display:flex;justify-content:space-between}.sliderlabel b{color:var(--accent)}input[type=range]{width:100%;accent-color:var(--accent)}.metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:12px 0}.metric{border:1px solid #294052;background:#0d1a28;border-radius:9px;padding:9px}.metric strong{font-size:1.08rem;display:block;font-variant-numeric:tabular-nums}.metric span{font-size:.71rem;color:var(--muted)}p,li{color:var(--muted)}.tiny{font-size:.78rem}#log{background:#08121c;border:1px solid #2a3f51;border-radius:9px;padding:10px;height:130px;overflow:auto;white-space:pre-wrap;word-break:break-word;font:12px/1.45 ui-monospace,Consolas,monospace;color:#afcadc}.options{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.options label{font-size:.82rem;color:var(--muted)}.options input{accent-color:var(--accent)}#fileInput{display:none}#cameraVideo{display:none}footer{font-size:.78rem;color:var(--muted);margin-top:18px}@media(max-width:1000px){.tools{grid-template-columns:repeat(3,1fr)}.metrics{grid-template-columns:repeat(3,1fr)}}@media(max-width:720px){.grid{grid-template-columns:1fr}.tools{grid-template-columns:repeat(2,1fr)}}@media(max-width:450px){.tools,.controlgrid{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}main{padding:10px}}
+</style>
+</head>
+<body>
+<main>
+<header>
+<div><div class="eyebrow">ESP_PICTURE_V2 · Analog still-picture link</div><h1>CB-IMAGE <span style="color:var(--accent)">1024 / ACCUMULATOR</span></h1><div class="sub">Repeated analog picture → many sync markers → progressively cleaner image</div></div>
+<div class="badge">1024 × 768 · 120,000 PCM8/s · 1.5 Mbaud · SIMPLEX</div>
+</header>
+<section class="panel">
+<h2>1 · Radio and image mode</h2>
+<div class="tools">
+ <div class="field"><label for="role">Station role</label><select id="role"><option value="rx">Receiver / accumulator</option><option value="tx">Transmitter / image source</option></select></div>
+ <div class="field"><label for="mode">Picture format (must match at both ends)</label><select id="mode"></select></div>
+ <div class="field"><label for="frequency">RF frequency (MHz)</label><input id="frequency" type="number" step="0.0001" min="2401" max="2482.5" value="2442.3125"></div>
+ <div class="field"><label for="fine">RX correction (Hz)</label><input id="fine" type="number" step="100" min="-50000" max="50000" value="0"></div>
+ <div class="field"><label for="apwr">TX APWR (0 = strongest)</label><input id="apwr" type="number" min="0" max="191" value="63"></div>
+</div>
+<div class="row"><button id="connect" class="primary">Connect USB serial</button><button id="disconnect" disabled>Disconnect</button><span class="tiny" style="color:var(--muted)">ESP8266 · ESP32 · ESP32-C5 · ESP32-C6 · 1,500,000 baud</span></div>
+<div id="status" class="status">Select your mode and connect your ESP over USB serial.</div>
+</section>
+<div class="metrics">
+<div class="metric"><strong id="frameTime">—</strong><span>One image sweep</span></div>
+<div class="metric"><strong id="rxH">0</strong><span>H line markers</span></div>
+<div class="metric"><strong id="rxS">0</strong><span>64-pixel markers</span></div>
+<div class="metric"><strong id="rxV">0</strong><span>Image V markers</span></div>
+<div class="metric"><strong id="passes">0</strong><span>Recognized passes</span></div>
+<div class="metric"><strong id="accPixels">0</strong><span>Accepted pixel observations</span></div>
+<div class="metric"><strong id="rejectBlocks">0</strong><span>Rejected 64-pixel segments</span></div>
+<div class="metric"><strong id="gapCount">0</strong><span>Missing PCM samples</span></div>
+<div class="metric"><strong id="txRate">0</strong><span>TX PCM kB/s</span></div>
+<div class="metric"><strong id="rxRate">0</strong><span>RX PCM kB/s</span></div>
+</div>
+<div class="grid">
+<section class="panel">
+<h2>2 · Image source (TX)</h2>
+<div class="screen"><canvas id="preview" width="1024" height="768"></canvas><div class="screenlabel">TX SOURCE · STILL IMAGE</div></div>
+<div class="details">Load a JPEG/PNG, freeze one webcam frame, or use the built-in test pattern. The *same* image is transmitted indefinitely.</div>
+<div class="row"><button id="pickPhoto">Load JPEG/PNG…</button><input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp,image/bmp"><button id="webcam">Freeze webcam</button><button id="pattern">Test pattern</button></div>
+<video id="cameraVideo" playsinline muted></video>
+<div class="row" style="margin-top:10px"><button id="startTx" class="primary" disabled>Transmit image continuously</button><button id="stopTx" class="danger" disabled>Stop TX</button></div>
+<div class="details" id="txInfo">Ready · one image repeated without changing the pixel data.</div>
+<div class="details">Sync tips are reserved outside the analog pixel voltage range; a line ID and segment ID are repeated in the raster to prevent accumulation at incorrect coordinates.</div>
+</section>
+<section class="panel">
+<h2>3 · Analog receiver with progressive averaging</h2>
+<div class="screen"><canvas id="received" width="1024" height="768"></canvas><div class="screenlabel" id="rxLabel">RX · AVERAGE</div></div>
+<div class="details" id="rxInfo">Waiting for line markers. Display updates as each received segment is placed at its absolute X/Y position.</div>
+<div class="row"><button id="savePNG">Save accumulated PNG</button><button id="resetAverage">Clear accumulated image</button><button id="loopTest">Local simulated RF test</button></div>
+<div class="controls">
+<div class="options"><label>Display <select id="showMode"><option value="average">Accumulated image</option><option value="raw">Latest received samples</option></select></label><label><input type="checkbox" id="accumulate" checked> Accumulate</label><label><input type="checkbox" id="autoImage" checked> Auto-reset on new picture ID</label></div>
+<div class="controlgrid" style="margin-top:10px">
+ <div><div class="sliderlabel">Outlier rejection <b id="rejectionOut">76</b></div><input id="rejection" type="range" min="20" max="120" step="2" value="76"></div>
+ <div><div class="sliderlabel">Brightness <b id="brightnessOut">0</b></div><input id="brightness" type="range" min="-100" max="100" value="0"></div>
+ <div><div class="sliderlabel">Contrast <b id="contrastOut">1.00×</b></div><input id="contrast" type="range" min="0.3" max="2.5" step="0.05" value="1"></div>
+ <div><div class="sliderlabel">Saturation <b id="saturationOut">1.00×</b></div><input id="saturation" type="range" min="0" max="2.5" step="0.05" value="1"></div>
+</div>
+</div>
+<p class="tiny" style="margin:11px 0 0">Analog video pixels have no CRC and are never retransmitted. Only the out-of-picture synchronization tags carry short check bits, so misplaced lines and sections can be skipped during averaging.</p>
+</section>
+</div>
+<section class="panel" style="margin-top:14px">
+<h2>4 · Transport / synchronization diagnostics</h2>
+<div id="diag" class="details">Not connected.</div>
+<div id="log"></div>
+</section>
+<footer>Experimental amateur radio concept · no guarantee of RF interoperability, spectral compliance or real-world image sharpness. Test with authorized equipment and permitted RF settings.</footer>
+</main>
+<script>
+/* CB-IMAGE/1024 - repeated analog PCM8 still-image television.
+ * ESP8266 CB FM STEREO V12 firmware is unmodified. No CRC/FEC on pixels.
+ * H marker + absolute 2-bit plane / 10-bit row tag per physical line;
+ * sector marker + 4-bit column tag every 64 pixels; V marker per image.
+ * Markers and their small check bits are out of the visible image area.
+ */
+(function(root){
+'use strict';
+const FS=120000, W=1024, H=768, SECTOR_PIXELS=64, SPP=2;
+const LOW=-118, HIGH=118, TAG_LOW=-104, TAG_HIGH=104, BLACK=-76, WHITE=76;
+const PX_MIN=-64,PX_MAX=64, INVALID=-128;
+const H_PRE=72,H_BIT=6,H_TAG_BITS=16,H_REF=24,H_HEADER=H_PRE+H_TAG_BITS*H_BIT+H_REF;
+const S_PRE=24,S_BIT=6,S_TAG_BITS=6,S_PAD=8,S_HEADER=S_PRE+S_TAG_BITS*S_BIT+S_PAD;
+const V_PRE=216,V_BIT=8,V_TAG_BITS=24,V_PAD=24,V_HEADER=V_PRE+V_TAG_BITS*V_BIT+V_PAD;
+const V_SCAN_RADIUS=6;
+const SECTOR_SAMPLES=S_HEADER+SECTOR_PIXELS*SPP;
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x)),b8=(x)=>(x+256)&255;
+const formats=Object.freeze([
+ {id:'444',label:'1024×768 · YUV 4:4:4 · full-resolution color · 2 samples/pixel',code:2,uvScale:1},
+ {id:'420',label:'1024×768 · YUV 4:2:0 · faster color · 2 samples/value',code:1,uvScale:2},
+ {id:'gray',label:'1024×768 · monochrome · 2 samples/pixel',code:0,uvScale:0}
+]);
+function fmt(id){const f=formats.find(x=>x.id===id);if(!f)throw Error('Unknown format '+id);return f;}
+function checksum4(data){let x=data ^(data>>>4)^(data>>>8);x^=x>>>2;return x&15;}
+function checksum2(data){return ((data^ (data>>>2) ^ (data>>>1) ^ 1)&3);}
+function checksum6(data){let c=0x2D;for(let b=17;b>=0;b--){const bit=(data>>>b)&1,carry=(c>>>5)&1;c=((c<<1)&63)^((carry^bit)?0x27:0);}return c;}
+function lineWord(plane,row){const payload=(plane<<10)|row;return (payload<<4)|checksum4(payload);}
+function validLineWord(word){const p=word>>>4;return checksum4(p)===(word&15)?{plane:p>>>10,row:p&1023}:null;}
+function sectionWord(index){return (index<<2)|checksum2(index);}
+function validSectionWord(word){const index=word>>>2;return index<16&&checksum2(index)===(word&3)?index:null;}
+function frameWord(id,modeCode){const d=((id&65535)<<2)|(modeCode&3);return d*64+checksum6(d);}
+function validFrameWord(word){const d=word>>>6;return checksum6(d)===(word&63)?{imageId:d>>>2,mode:d&3}:null;}
+function layout(mode){const f=fmt(mode),rows=[];let sampleOffset=V_HEADER;
+ const planes=f.id==='gray'?[['y',W,H]]:f.id==='444'?[['y',W,H],['u',W,H],['v',W,H]]:[['y',W,H],['u',W/2,H/2],['v',W/2,H/2]];
+ for(const [name,width,height] of planes)for(let row=0;row<height;row++){
+  const len=H_HEADER+width/SECTOR_PIXELS*SECTOR_SAMPLES;
+  rows.push({plane:name,planeCode:name==='y'?0:name==='u'?1:2,row,width,len,offset:sampleOffset});sampleOffset+=len;
+ }
+ return {format:f,rows,frameSamples:sampleOffset,frameSeconds:sampleOffset/FS,segments:rows.reduce((s,r)=>s+r.width/SECTOR_PIXELS,0)};
+}
+const layouts=Object.fromEntries(formats.map(f=>[f.id,layout(f.id)]));
+function getLayout(mode){return layouts[mode];}
+function sourceFromRGBA(rgba,mode){const f=fmt(mode);if(rgba.length!==W*H*4)throw Error('Source image must be RGBA 1024×768');
+ const y=new Uint8Array(W*H),uvW=f.uvScale===2?W/2:W,uvH=f.uvScale===2?H/2:H;
+ const u=f.uvScale?new Uint8Array(uvW*uvH):null,v=f.uvScale?new Uint8Array(uvW*uvH):null;
+ // Full range YUV BT.601-style, 8-bit input components; analog on-air
+ // pixel voltage uses a narrower reserved range for robust sync pulses.
+ for(let p=0;p<W*H;p++){
+  const j=p*4,r=rgba[j],g=rgba[j+1],b=rgba[j+2],yy=.299*r+.587*g+.114*b;
+  y[p]=clamp(Math.round(yy),0,255);
+  if(f.uvScale===1){u[p]=clamp(Math.round((b-yy)/1.772+128),0,255);v[p]=clamp(Math.round((r-yy)/1.402+128),0,255);}
+ }
+ if(f.uvScale===2)for(let row=0;row<H;row+=2)for(let col=0;col<W;col+=2){
+  let su=0,sv=0;
+  for(let dy=0;dy<2;dy++)for(let dx=0;dx<2;dx++){
+   const p=(row+dy)*W+col+dx,j=p*4,yy=y[p];su+=(rgba[j+2]-yy)/1.772+128;sv+=(rgba[j]-yy)/1.402+128;
+  }
+  const pos=(row/2)*(W/2)+col/2;u[pos]=clamp(Math.round(su/4),0,255);v[pos]=clamp(Math.round(sv/4),0,255);
+ }
+ return {mode,y,u,v};
+}
+function patternRGBA(){const out=new Uint8ClampedArray(W*H*4);
+ for(let row=0;row<H;row++)for(let x=0;x<W;x++){
+  const j=4*(row*W+x),sq=((x/64|0)+(row/64|0))&1;
+  let r=sq?205:44,g=r,b=r;
+  if(x>W*.24&&x<W*.74&&row>H*.25&&row<H*.72){r=g=b=Math.round(255*(x/W-.24)/.5);}
+  if(row>H*.84){const k=Math.min(5,x*6/W|0);[r,g,b]=[[225,53,53],[232,173,51],[49,195,109],[42,151,220],[157,85,213],[224,92,169]][k];}
+  if((x-512)**2+(row-380)**2<130**2){const v=128+120*Math.sin((x-512)*.047);r=clamp(Math.round(v),0,255);g=r;b=r;}
+  out[j]=r;out[j+1]=g;out[j+2]=b;out[j+3]=255;
+ }
+ return out;
+}
+function encodeBits(dst,at,word,bits,nsamples){for(let i=bits-1;i>=0;i--){dst.fill(b8(((word>>>i)&1)?TAG_HIGH:TAG_LOW),at,at+nsamples);at+=nsamples;}return at;}
+function writeWave(source,mode,imageId){const p=getLayout(mode),dst=new Uint8Array(p.frameSamples);if(!source||source.mode!==mode)throw Error('Mode/source mismatch');let at=0;
+ const put=(v,n)=>{dst.fill(b8(v),at,at+n);at+=n;};
+ // Unique vertical sync waveform: three long LOW plateaus alternating with HIGH.
+ for(let k=0;k<3;k++){put(LOW,48);put(HIGH,24);}
+ at=encodeBits(dst,at,frameWord(imageId,p.format.code),V_TAG_BITS,V_BIT);put(BLACK,V_PAD);
+ for(const row of p.rows){
+  for(let k=0;k<3;k++){put(LOW,12);put(HIGH,12);}
+  at=encodeBits(dst,at,lineWord(row.planeCode,row.row),H_TAG_BITS,H_BIT);
+  put(BLACK,12);put(WHITE,12);
+  const data=source[row.plane];if(!data)throw Error('Missing color plane '+row.plane);
+  for(let s=0;s<row.width/64;s++){
+   put(LOW,8);put(HIGH,8);put(LOW,8);
+   at=encodeBits(dst,at,sectionWord(s),S_TAG_BITS,S_BIT);put(BLACK,S_PAD);
+   for(let x=0;x<64;x++){
+    const q=data[row.row*row.width+s*64+x],target=PX_MIN+(PX_MAX-PX_MIN)*q/255;
+    // Two neighboring PCM values represent an average in half-level steps.
+    // This preserves ~8-bit tonal granularity despite reserved sync headroom.
+    const first=Math.floor(target),second=Math.round(target*2-first);
+    put(first,1);put(second,1);
+   }
+  }
+ }
+ if(at!==dst.length)throw Error('Waveform length mismatch: '+at+' != '+dst.length);
+ return dst;
+}
+// Streaming marker separator and analog image accumulator.
+// Only synchronization/position tags are checked. Video samples are never
+// CRC-protected; individual observations can be ignored for averaging.
+class Receiver{
+ constructor({mode='444',onUpdate=()=>{},onImageChange=()=>{},onFrame=()=>{}}={}){
+  this.onUpdate=onUpdate;this.onImageChange=onImageChange;this.onFrame=onFrame;this.rejection=76;this.pauseAverage=false;this.autoResetOnId=true;
+  this.maxOffset=13;this._allocate(mode);
+ }
+ _allocate(mode){this.mode=mode;this.p=getLayout(mode);this.f=this.p.format;this.yW=W;this.uvW=this.f.uvScale===2?W/2:W;
+  this.avg={y:new Float32Array(W*H),u:this.f.uvScale?new Float32Array((W/this.f.uvScale)*(H/this.f.uvScale)):null,v:this.f.uvScale?new Float32Array((W/this.f.uvScale)*(H/this.f.uvScale)):null};
+  this.count={y:new Uint16Array(W*H),u:this.f.uvScale?new Uint16Array(this.avg.u.length):null,v:this.f.uvScale?new Uint16Array(this.avg.v.length):null};
+  this.latest={y:new Uint8Array(W*H),u:this.f.uvScale?new Uint8Array(this.avg.u.length):null,v:this.f.uvScale?new Uint8Array(this.avg.v.length):null};
+  this.clearAccumulator();this.resetStream();
+ }
+ setMode(mode){if(mode!==this.mode)this._allocate(mode);}
+ clearAccumulator(){for(const name of ['y','u','v']){if(!this.avg[name])continue;this.avg[name].fill(name==='y'?95:128);this.latest[name].fill(name==='y'?95:128);this.count[name].fill(0);}this.acceptedPixels=0;this.rejectedPixels=0;this.acceptedSectors=0;this.rejectedSectors=0;this.acceptedLines=0;this.imageFrames=0;this.lastImageId=null;this.rawReceived=0;}
+ resetStream(){this.raw=new Int16Array(16384);this.mask=16383;this.index=0;this.lastH=-1e9;this.lastV=-1e9;this.hHits=0;this.vHits=0;this.hTagsGood=0;this.hTagsBad=0;this.sectionTagsGood=0;this.sectionTagsBad=0;this.falseMarkers=0;this.missing=0;this.pendingH=null;this.pendingV=null;this.activeLine=null;this.lastGain=1;this.lastOffset=0;}
+ at(idx){return idx<0||idx>=this.index||idx<this.index-this.raw.length?INVALID:this.raw[idx&this.mask];}
+ // Return normalized score. The input can be attenuated or DC-shifted.
+ scorePattern(start,sections,minContrast){
+  if(start<0||start+sections.reduce((s,v)=>s+v[1],0)>this.index)return null;
+  let lo=0,hi=0,nlo=0,nhi=0,variance=0,means=[];
+  let at=start;
+  for(const [isHigh,len] of sections){
+   const trim=len>=24?3:len>=12?2:1;let sum=0,sq=0,n=0;
+   for(let i=trim;i<len-trim;i++){const v=this.at(at+i);if(v===INVALID)continue;sum+=v;sq+=v*v;n++;}
+   if(n<(len-2*trim)*.70)return null;
+   const m=sum/n,sd=Math.sqrt(Math.max(0,sq/n-m*m));means.push({m,sd,isHigh});variance+=sd;
+   if(isHigh){hi+=m;nhi++;}else{lo+=m;nlo++;}
+   at+=len;
+  }
+  lo/=nlo;hi/=nhi;const diff=hi-lo;
+  if(diff<minContrast)return null;
+  const maxSD=Math.max(23,diff*.18);
+  if(means.some(x=>x.sd>maxSD))return null;
+  if(means.some(x=>Math.abs(x.m-(x.isHigh?hi:lo))>Math.max(25,diff*.20)))return null;
+  // A flat plateau can score equally at several adjacent sample offsets.
+  // Use the signed transition edges to recover the exact start sample;
+  // otherwise a 2-sample pixel would be shifted by a full pixel.
+  let edgeSum=0,edges=0,pos=start+sections[0][1];
+  for(let j=1;j<sections.length;j++){
+   const before=this.at(pos-1),after=this.at(pos);
+   if(before!==INVALID&&after!==INVALID){edgeSum+=(sections[j][0]?1:-1)*(after-before);edges++;}
+   pos+=sections[j][1];
+  }
+  return {score:diff-variance*.3+(edges?edgeSum/edges*.7:0),low:lo,high:hi,diff};
+ }
+ scan(pat,len,offset,window,minContrast){const sections=pat;let best=null;
+  const coarse=this.index-len-offset;
+  const initial=this.scorePattern(coarse,sections,minContrast);
+  if(!initial)return null;
+  // Refine sample-accurate phase. Crucial for 2-sample pixels.
+  for(let dx=-window;dx<=window;dx++){
+   const s=coarse+dx,v=this.scorePattern(s,sections,minContrast);
+   if(v&&(!best||v.score>best.score))best={...v,start:s};
+  }
+  return best;
+ }
+ bits(start,bits,samples,low,high){const mid=(low+high)/2,margin=Math.max(13,Math.abs(high-low)*.15);let word=0;
+  for(let b=0;b<bits;b++){
+   let sum=0,n=0;
+   for(let s=1;s<samples-1;s++){const v=this.at(start+b*samples+s);if(v!==INVALID){sum+=v;n++;}}
+   if(n<Math.max(2,(samples-2)*.7))return null;
+   const mean=sum/n;if(Math.abs(mean-mid)<margin)return null;
+   word=word*2+(mean>mid?1:0);
+  }
+  return word;
+ }
+ _onH(start,low,high){if(start-this.lastH<300)return;this.lastH=start;this.hHits++;
+  this.pendingH={start,low,high};
+ }
+ _finishH(){const h=this.pendingH;if(!h||this.index<h.start+H_HEADER+2)return;this.pendingH=null;
+  const tag=this.bits(h.start+H_PRE,16,H_BIT,h.low,h.high),loc=tag===null?null:validLineWord(tag);
+  if(!loc){this.hTagsBad++;return;}
+  const pcode=loc.plane;
+  const plane=['y','u','v'][pcode];if(!plane || (plane!=='y'&&this.f.uvScale===0)){this.hTagsBad++;return;}
+  const width=plane==='y'?W:W/this.f.uvScale,height=plane==='y'?H:H/this.f.uvScale;
+  if(loc.row>=height){this.hTagsBad++;return;}
+  const bl=this.mean(h.start+H_PRE+16*H_BIT,12),wh=this.mean(h.start+H_PRE+16*H_BIT+12,12);
+  if(bl===null||wh===null||wh-bl<40){this.hTagsBad++;return;}
+  const gain=(wh-bl)/(WHITE-BLACK),offs=bl-BLACK*gain;
+  if(gain<.27||gain>2.6){this.hTagsBad++;return;}
+  this.hTagsGood++;this.lastGain=gain;this.lastOffset=offs;
+  this.activeLine={start:h.start,plane,row:loc.row,width,nsectors:width/64,next:0,gain,offs,seen:0};
+ }
+ mean(start,len){let sum=0,n=0;for(let k=1;k<len-1;k++){const v=this.at(start+k);if(v!==INVALID){sum+=v;n++;}}return n>=Math.max(2,len*.55)?sum/n:null;}
+ _onV(start,low,high){if(this.pendingV||start-this.lastV<this.p.frameSamples*.45)return;this.vHits++;this.pendingV={start,low,high};}
+ _finishV(){const v=this.pendingV;if(!v||this.index<v.start+V_HEADER+2)return;this.pendingV=null;
+  const word=this.bits(v.start+V_PRE,24,V_BIT,v.low,v.high),data=word===null?null:validFrameWord(word);
+  if(!data){this.falseMarkers++;return;}
+  if(data.mode!==this.f.code){this.formatMismatch=data.mode;return;}
+  this.lastV=v.start;
+  this.formatMismatch=null;this.imageFrames++;
+  if(this.lastImageId!==null && this.lastImageId!==data.imageId){if(this.autoResetOnId)this.clearAccumulator();this.imageFrames=1;this.onImageChange(data.imageId);}
+  this.lastImageId=data.imageId;this.onFrame({imageId:data.imageId,pass:this.imageFrames});
+ }
+ _finishSector(){const line=this.activeLine;if(!line)return;
+  while(line.next<line.nsectors){
+   const s=line.next,guess=line.start+H_HEADER+s*SECTOR_SAMPLES;
+   if(this.index<guess+SECTOR_SAMPLES+this.maxOffset+2)break;
+   // Find a local sync peak near the nominal sector start (not at an arbitrary pixel).
+   const pattern=[[false,8],[true,8],[false,8]];let best=null;
+   for(let dx=-this.maxOffset;dx<=this.maxOffset;dx++){
+    const start=guess+dx,z=this.scorePattern(start,pattern,59);
+    if(z&&(!best||z.score>best.score))best={...z,start};
+   }
+   line.next++;
+   if(!best){this.sectionTagsBad++;this.rejectedSectors++;continue;}
+   const w=this.bits(best.start+S_PRE,S_TAG_BITS,S_BIT,best.low,best.high);
+   if(w===null||validSectionWord(w)!==s){this.sectionTagsBad++;this.rejectedSectors++;continue;}
+   this.sectionTagsGood++;
+   const dataStart=best.start+S_HEADER,plane=line.plane,width=line.width,values=new Float32Array(64),valid=new Uint8Array(64);
+   let missing=0,outliers=0,already=0;
+   for(let i=0;i<64;i++){
+    const a=this.at(dataStart+i*SPP),b=this.at(dataStart+i*SPP+1);
+    if(a===INVALID||b===INVALID){missing++;continue;}
+    const raw=(a+b)/2;
+    const level=clamp((raw-line.offs-PX_MIN*line.gain)*255/((PX_MAX-PX_MIN)*line.gain),0,255);
+    values[i]=level;valid[i]=1;
+    const pos=line.row*width+s*64+i,count=this.count[plane][pos];
+    if(count>=3){already++;if(Math.abs(level-this.avg[plane][pos])>this.rejection)outliers++;}
+   }
+   // Reject a grossly displaced/noisy sector; no CRC or digital pixel checks.
+   if(missing>20||(already>=20&&outliers>already*.42)){this.rejectedSectors++;this.rejectedPixels+=64;continue;}
+   const accumulator=this.avg[plane],counts=this.count[plane],latest=this.latest[plane];
+   for(let i=0;i<64;i++){
+    if(!valid[i]){this.rejectedPixels++;continue;}
+    const pos=line.row*width+s*64+i,cur=counts[pos],x=values[i];latest[pos]=clamp(Math.round(x),0,255);this.rawReceived++;
+    if(this.pauseAverage)continue;
+    if(cur>=4&&Math.abs(x-accumulator[pos])>this.rejection){this.rejectedPixels++;continue;}
+    counts[pos]=Math.min(60000,cur+1);accumulator[pos]+= (x-accumulator[pos])/counts[pos];this.acceptedPixels++;
+   }
+   line.seen++;this.acceptedSectors++;
+  }
+  if(line.next>=line.nsectors){if(line.seen)this.acceptedLines++;this.activeLine=null;this.onUpdate();}
+ }
+ feed(value){const i=this.index;this.raw[i&this.mask]=value;this.index++;if(value===INVALID)this.missing++;
+  if((i&3)===0){
+   const h=this.scan([[false,12],[true,12],[false,12],[true,12],[false,12],[true,12]],H_PRE,1,5,67);
+   if(h)this._onH(h.start,h.low,h.high);
+  }
+  if((i&3)===0){
+   // Wait for the trailing samples so every candidate phase can be scored.
+   const v=this.scan([[false,48],[true,24],[false,48],[true,24],[false,48],[true,24]],V_PRE,1+V_SCAN_RADIUS,V_SCAN_RADIUS,72);
+   if(v)this._onV(v.start,v.low,v.high);
+  }
+  this._finishH();this._finishV();this._finishSector();
+ }
+ feedBytes(bytes){for(let i=0;i<bytes.length;i++)this.feed(bytes[i]===128?INVALID:(bytes[i]<<24)>>24);}
+ feedGap(n){if(n<=0)return;
+  this.missing+=n;
+  if(n<4000){for(let i=0;i<n;i++)this.feed(INVALID);this.missing-=n;}
+  else {this.index+=n;this.raw.fill(INVALID);this.pendingH=null;this.pendingV=null;this.activeLine=null;this.lastH=-1e9;this.lastV=-1e9;}
+ }
+ compose(which='average',brightness=0,contrast=1,saturation=1){const out=new Uint8ClampedArray(W*H*4),y=this[which==='raw'?'latest':'avg'].y;
+  const uv=this[which==='raw'?'latest':'avg'],scale=this.f.uvScale,uw=this.uvW;
+  for(let row=0;row<H;row++)for(let x=0;x<W;x++){
+   const pos=row*W+x,j=pos*4,luma=y[pos];let r=luma,g=luma,b=luma;
+   if(scale){const uindex=(row/scale|0)*uw+(x/scale|0),du=(uv.u[uindex]-128)*saturation,dv=(uv.v[uindex]-128)*saturation;
+    r=luma+1.402*dv;g=luma-.344136*du-.714136*dv;b=luma+1.772*du;
+   }
+   out[j]=clamp((r-128)*contrast+128+brightness,0,255);
+   out[j+1]=clamp((g-128)*contrast+128+brightness,0,255);
+   out[j+2]=clamp((b-128)*contrast+128+brightness,0,255);out[j+3]=255;
+  }
+  return out;
+ }
+}
+root.CBImage1024=Object.freeze({FS,W,H,SPP,SECTOR_PIXELS,H_PRE,H_HEADER,S_PRE,S_HEADER,V_PRE,V_HEADER,SECTOR_SAMPLES,
+ LOW,HIGH,BLACK,WHITE,PX_MIN,PX_MAX,formats,fmt,getLayout,patternRGBA,sourceFromRGBA,writeWave,Receiver,
+ checksum4,checksum2,checksum6,lineWord,validLineWord,sectionWord,validSectionWord,frameWord,validFrameWord});
+})(typeof globalThis!=='undefined'?globalThis:this);
+</script>
+<script>
+/* CB-IMAGE/1024 analog still-picture station and shared Web Serial link. */
+(()=>{
+'use strict';
+const C=globalThis.CBImage1024,$=id=>document.getElementById(id),enc=new TextEncoder(),sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const PREFIX=[77,80,88,51],PREBUFFER=12000,BLOCK=2400;
+let mode='444',sourceType='pattern',sourcePixels=null,photoId=1,wave=null,wavePos=0;
+let session=null,connecting=false,pending=[],rxLastIndex=null,lastPacketAt=0,txBytes=0,rxBytes=0,txRateAt=0,rxRateAt=0,txBytesPrev=0,rxBytesPrev=0,maxTxLag=0,rxMaxGap=0;
+let cameraStream=null,browserTestRunning=false;
+const preview=$('preview').getContext('2d',{alpha:false,willReadFrequently:false}),display=$('received').getContext('2d',{alpha:false});
+const sourceCanvas=document.createElement('canvas');sourceCanvas.width=C.W;sourceCanvas.height=C.H;const sourceCtx=sourceCanvas.getContext('2d',{willReadFrequently:true});
+function log(message){const d=new Date().toLocaleTimeString('en-GB',{hour12:false});$('log').textContent=($('log').textContent+`[${d}] ${message}\n`).split('\n').slice(-55).join('\n');$('log').scrollTop=$('log').scrollHeight;}
+function status(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);}
+function imageRGBA(ctx,rgba){ctx.putImageData(new ImageData(new Uint8ClampedArray(rgba),C.W,C.H),0,0);}
+function newPhotoId(){if(globalThis.crypto?.getRandomValues){const x=new Uint16Array(1);crypto.getRandomValues(x);return x[0];}return Math.floor(Math.random()*65536);}
+function makeReceiver(){return new C.Receiver({mode,onImageChange:id=>{log('Transmitter changed image ID to '+id+'; accumulation'+(rx.autoResetOnId?' reset.':' retained (manual mode).'));},onFrame:info=>{log('V sync / complete image scan '+info.pass+' · image ID '+info.imageId);}});}
+let rx=makeReceiver();
+function updatePlan(){const p=C.getLayout(mode);$('frameTime').textContent=p.frameSeconds.toFixed(1)+' s';$('txInfo').textContent=`${p.frameSamples.toLocaleString('en-US')} PCM samples per sweep · ${p.rows.length} physical Y/U/V scanlines · ${p.segments.toLocaleString('en-US')} sector sync tags per sweep. Each picture is repeated without changing any pixel.`;
+ if(sourcePixels)buildWave();else usePattern(false);
+ rx.setMode(mode);rxLastIndex=null;drawRx();}
+function buildWave(){if(!sourcePixels)return;const source=C.sourceFromRGBA(sourcePixels,mode);wave=C.writeWave(source,mode,photoId);wavePos=0;log(`Prepared ${mode.toUpperCase()} image · ${(wave.length/1000000).toFixed(2)} MB PCM · ${C.getLayout(mode).frameSeconds.toFixed(2)} seconds per pass · image ID ${photoId}.`);}
+function drawSource(source){sourcePixels=new Uint8ClampedArray(source);imageRGBA(preview,sourcePixels);photoId=newPhotoId();buildWave();}
+function usePattern(withLog=true){sourceType='pattern';if(cameraStream){cameraStream.getTracks().forEach(t=>t.stop());cameraStream=null;}drawSource(C.patternRGBA());if(withLog)log('Test pattern loaded.');}
+async function chooseFile(file){if(!file)return;if(session?.state==='tx'){status('Stop transmitting before changing pictures.',true);return;}
+ try{
+  const bitmap=await createImageBitmap(file);sourceCtx.fillStyle='#000';sourceCtx.fillRect(0,0,C.W,C.H);
+  const ratio=Math.min(C.W/bitmap.width,C.H/bitmap.height),w=bitmap.width*ratio,h=bitmap.height*ratio;
+  sourceCtx.drawImage(bitmap,(C.W-w)/2,(C.H-h)/2,w,h);bitmap.close();sourceType='image';drawSource(sourceCtx.getImageData(0,0,C.W,C.H).data);
+  log('Image loaded: '+file.name+` (${Math.round(w)}×${Math.round(h)} fitted within 1024×768).`);
+ }catch(e){status('Cannot open image: '+e.message,true);log('Image: '+e.message);}
+}
+async function captureCamera(){if(session?.state==='tx'){status('Stop TX before freezing a different image.',true);return;}
+ try{
+  if(!navigator.mediaDevices?.getUserMedia)throw Error('Webcam permission requires a secure context; use http://localhost in Chrome/Edge.');
+  if(cameraStream)cameraStream.getTracks().forEach(t=>t.stop());cameraStream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:960}},audio:false});
+  const video=$('cameraVideo');video.srcObject=cameraStream;await video.play();
+  sourceCtx.fillStyle='black';sourceCtx.fillRect(0,0,C.W,C.H);sourceCtx.drawImage(video,0,0,C.W,C.H);
+  sourceType='camera';drawSource(sourceCtx.getImageData(0,0,C.W,C.H).data);
+  cameraStream.getTracks().forEach(t=>t.stop());cameraStream=null;video.srcObject=null;
+  log('Webcam still frame frozen (will not change during TX).');
+ }catch(e){status('Webcam: '+e.message,true);log('Webcam: '+e.message);}
+}
+function nextWave(count){const out=new Uint8Array(count);let done=0;if(!wave)throw Error('No image waveform prepared');
+ while(done<count){const n=Math.min(count-done,wave.length-wavePos);out.set(wave.subarray(wavePos,wavePos+n),done);done+=n;wavePos+=n;if(wavePos===wave.length)wavePos=0;}
+ return out;}
+class ByteParser{
+ constructor(onFrame,onLine,onReady){this.rest=new Uint8Array(0);this.onFrame=onFrame;this.onLine=onLine;this.onReady=onReady;}
+ feed(chunk){let data;if(this.rest.length){data=new Uint8Array(this.rest.length+chunk.length);data.set(this.rest);data.set(chunk,this.rest.length);}else data=chunk;
+  let at=0;
+  while(at<data.length){const v=data[at];
+   if(v===77){const count=Math.min(4,data.length-at);let good=true;for(let i=1;i<count;i++)if(data[at+i]!==PREFIX[i])good=false;
+    if(good){if(data.length-at<138)break;
+     const view=new DataView(data.buffer,data.byteOffset+at,138),index=view.getUint32(4,true),strength=view.getUint16(8,true);
+     this.onFrame(index,strength,data.subarray(at+10,at+138));at+=138;continue;}}
+   if(v===0xef){if(data.length-at<4)break;if(data[at+1]===0xef&&data[at+2]===0xef&&data[at+3]===0xef){this.onReady();at+=4;continue;}}
+   if(v===79||v===69){const expected=v===79?[79,75,32]:[69,82,82,32],count=Math.min(expected.length,data.length-at);let good=true;for(let i=1;i<count;i++)if(data[at+i]!==expected[i])good=false;
+    if(good){if(data.length-at<expected.length)break;let end=at+expected.length,limit=Math.min(data.length,at+160);
+     for(;end<limit&&data[end]!==10&&data[end]!==13;end++)if(data[end]<32||data[end]>126)break;
+     if(end===data.length)break;
+     if(data[end]===10||data[end]===13){this.onLine(new TextDecoder().decode(data.subarray(at,end)));at=end+1+(data[end]===13&&data[end+1]===10?1:0);continue;}}
+   }
+   at++;
+  }
+  this.rest=data.slice(at);if(this.rest.length>4096)this.rest=new Uint8Array(0);
+ }
+}
+function rxPacket(index,strength,data){if(!session||session.disconnecting||session.state!=='rx')return;
+ lastPacketAt=performance.now();rxBytes+=data.length;
+ if(rxLastIndex!==null){const diff=(index-rxLastIndex)>>>0;
+  if(diff>0&&diff<C.FS*15){rxMaxGap=Math.max(rxMaxGap,diff);rx.feedGap(diff);}
+  else if(diff>=C.FS*15){rx.resetStream();log('Large MPX3 time-index discontinuity; keeping accumulated image.');}
+ }
+ rx.feedBytes(data);rxLastIndex=(index+data.length)>>>0;
+}
+const isRxReply=line=>/^OK RX \d+ 120000 HQ$/.test(line);
+function onLine(line){log(line);
+ if(session?.state==='tuning'&&isRxReply(line))session.state='rx';
+ for(const p of [...pending])if(p.test(line))p.finish(null,line);
+ if(/^ERR /.test(line)){for(const p of [...pending])p.finish(Error(line));if(session?.state==='tx'){session.txRunning=false;status('RF fault: '+line,true);}}
+}
+function onReady(){if(session?.state==='keying')session.finishReady?.();}
+function waitLine(test,timeout=5000){let cancel;
+ const reply=new Promise((resolve,reject)=>{const p={test,timer:0,finish(error,line){pending=pending.filter(x=>x!==p);clearTimeout(p.timer);if(error)reject(error);else resolve(line);}};
+  cancel=p.finish;p.timer=setTimeout(()=>cancel(Error('Serial reply timed out')),timeout);pending.push(p);
+ });return {reply,cancel};
+}
+async function write(bytes,own=session){if(!own||own.closing)throw Error('Port disconnected');await own.writer.write(typeof bytes==='string'?enc.encode(bytes):bytes);}
+async function commandReply(command,test,timeout,own=session){const {reply,cancel}=waitLine(test,timeout);
+ try{const [,line]=await Promise.all([write(command,own),reply]);return line;}
+ catch(e){cancel(e);throw e;}
+}
+async function serialRead(own){const parser=new ByteParser(rxPacket,onLine,onReady);try{
+  while(session===own&&!own.closing){const reader=own.port.readable.getReader();own.reader=reader;
+   try{while(session===own&&!own.closing){const {value,done}=await reader.read();if(done)return;if(value?.length)parser.feed(value);}}
+   finally{reader.releaseLock();own.reader=null;}
+  }
+ }catch(e){if(!own.closing){log('Serial read failure: '+e.message);status('RX serial failed: '+e.message,true);}}
+}
+function rfConfig(){const hz=Math.round(Number($('frequency').value)*1e6),fine=Number($('fine').value),apwr=Number($('apwr').value);
+ if(!Number.isSafeInteger(hz)||hz<2401000000||hz>2482500000)throw Error('RF frequency must be 2401–2482.5 MHz');
+ if(!Number.isInteger(fine)||Math.abs(fine)>50000)throw Error('RX correction must be within ±50 kHz');
+ if(!Number.isInteger(apwr)||apwr<0||apwr>191)throw Error('APWR must be 0–191');return {hz,fine,apwr};
+}
+function buttons(){const state=session?.state||'off',active=Boolean(session)||connecting,closing=session?.disconnecting;
+ $('connect').disabled=active;$('disconnect').disabled=connecting||!session||closing;
+ $('startTx').disabled=closing||state!=='rx'||$('role').value!=='tx';$('stopTx').disabled=closing||!['tx','keying'].includes(state);
+ $('role').disabled=active;$('mode').disabled=active;$('frequency').disabled=active;$('apwr').disabled=active;$('fine').disabled=active;
+ for(const id of ['pickPhoto','webcam','pattern'])$(id).disabled=['tx','keying','stopping'].includes(state);
+}
+async function connect(){if(session||connecting)return;connecting=true;buttons();let own=null,openedPort=null;try{
+ const cfg=rfConfig();if(!navigator.serial)throw Error('Web Serial unavailable. Use desktop Chrome/Edge or localhost.');
+ const port=await navigator.serial.requestPort();await port.open({baudRate:1500000,dataBits:8,stopBits:1,parity:'none',flowControl:'none',bufferSize:65536});
+ openedPort=port;own={port,writer:port.writable.getWriter(),reader:null,state:'connecting',radioReady:false,disconnecting:false,closing:false,txRunning:false,txTask:null,finishReady:null};
+ session=own;own.readTask=serialRead(own);status('Checking Picture firmware…');await sleep(280);
+ for(let tries=0;tries<3;tries++){try{await commandReply('STATUS\n',s=>/^OK STATUS CB_FM_STEREO 4$/.test(s),2300,own);break;}
+ catch(e){if(tries===2||/^ERR /.test(e.message))throw e;await sleep(350);}}
+ await commandReply('STOP\n',s=>s==='OK STOP',4000,own);own.radioReady=true;
+ let model='Legacy CB-IMAGE';
+ try{const identity=await commandReply('PICTURE?\n',s=>/^OK PICTURE 2 (ESP8266|ESP32|ESP32-C5|ESP32-C6)$/.test(s),2500,own);model=identity.split(' ').at(-1);}
+ catch(e){if(e.message!=='ERR COMMAND')throw e;}
+ rx.resetStream();rxLastIndex=null;lastPacketAt=performance.now();rxMaxGap=0;own.state='tuning';
+ await commandReply(`RX ${cfg.hz} HQ ${cfg.fine}\n`,isRxReply,6500,own);
+ status(model+($('role').value==='rx'?' receiving. Waiting for the repeated photo.':' ready to transmit the stored photo.'));
+ }catch(e){const message='Connection: '+e.message;log(message);if(own&&session===own)await disconnect();else if(openedPort){try{await openedPort.close();}catch(_e){}}status(message,true);}
+ finally{connecting=false;buttons();}}
+async function disconnect(){const own=session;if(!own||own.disconnecting)return;own.disconnecting=true;buttons();let stopError;
+ try{await stopTx();if(own.radioReady)await commandReply('STOP\n',s=>s==='OK STOP',2500,own);}
+ catch(e){stopError=e;log('Radio stop: '+e.message);}
+ own.closing=true;own.txRunning=false;
+ for(const p of [...pending])p.finish(Error('Disconnected'));
+ session=null;
+ try{await own.reader?.cancel();}catch(_e){}try{await own.readTask;}catch(_e){}
+ try{own.writer.releaseLock();}catch(_e){}try{await own.port.close();}catch(_e){}
+ buttons();status(stopError?'USB disconnected. Radio stop was not confirmed.':'Disconnected. Accumulated image is retained.',Boolean(stopError));log('USB serial disconnected.');
+}
+async function txLoop(own){try{
+ txBytes=0;txBytesPrev=0;txRateAt=performance.now();maxTxLag=0;wavePos=0;
+ // V12 buffers 16 KiB; preload 12 KiB before starting steady pacing.
+ await write(nextWave(PREBUFFER),own);txBytes+=PREBUFFER;
+ await sleep(PREBUFFER/150);
+ const epoch=performance.now();let sent=0;
+ while(session===own&&own.txRunning&&!own.closing){
+  const deadline=epoch+sent*1000/C.FS,wait=deadline-performance.now();if(wait>1)await sleep(Math.min(wait,50));
+  if(session!==own||!own.txRunning)break;
+  const late=performance.now()-deadline;if(late>maxTxLag)maxTxLag=Math.round(late);
+  if(late>100)log('Warning: delayed USB feed. The V12 TX ring may underflow; extra sync markers cannot recover omitted data.');
+  await write(nextWave(BLOCK),own);sent+=BLOCK;txBytes+=BLOCK;
+ }
+ }catch(e){if(session===own&&!own.closing){status('TX failed: '+e.message,true);log('TX failed: '+e.message);}}
+}
+async function startTx(){const own=session;if(!own||own.disconnecting||own.state!=='rx'||$('role').value!=='tx')return;
+ try{if(!wave)buildWave();const cfg=rfConfig();own.state='keying';buttons();status('Starting RF transmission…');
+  const readyP=new Promise((resolve,reject)=>{own.finishReady=(error)=>{clearTimeout(timer);own.finishReady=null;if(error)reject(error);else resolve();};const timer=setTimeout(()=>own.finishReady(Error('RF READY signal not received')),4000);});
+  await Promise.all([write(`TX ${cfg.apwr}\n`,own),readyP]);
+  if(session!==own||own.closing||own.state!=='keying')return;
+  own.state='tx';own.txRunning=true;buttons();status('Repeating the same image continuously, with H/sector/V markers.');log('TX start: '+mode+', image ID '+photoId+', period '+C.getLayout(mode).frameSeconds.toFixed(2)+' s.');
+  own.txTask=txLoop(own);await own.txTask;if(own.state==='tx')await stopTx();
+ }catch(e){own.finishReady?.(e);if(session===own&&own.state==='keying'){await stopTx();status('Cannot start TX: '+e.message,true);log('TX: '+e.message);}}}
+function stopTx(){const own=session;if(!own)return;if(own.stopTask)return own.stopTask;
+ if(!['tx','keying'].includes(own.state))return;
+ const resume=waitLine(isRxReply,1900).reply.catch(()=>null);
+ own.state='stopping';own.txRunning=false;own.finishReady?.(Error('TX stopped'));buttons();
+ own.stopTask=(async()=>{
+  await own.txTask;
+  // Raw PCM has no in-band STOP. Wait for the firmware to resume its receive profile.
+  const resumed=await resume;
+  if(session===own){own.state=resumed?'rx':'idle';rxLastIndex=null;rx.resetStream();buttons();if(!own.disconnecting)status(resumed?'TX stopped. Radio returned to HQ RX.':'TX ended without a receive acknowledgement. Reconnect the radio.',!resumed);}
+ })().finally(()=>{own.stopTask=null;own.txTask=null;});return own.stopTask;
+}
+function drawRx(){if(!rx)return;const current=rx.compose($('showMode').value,Number($('brightness').value),Number($('contrast').value),Number($('saturation').value));imageRGBA(display,current);
+ $('rxLabel').textContent=$('showMode').value==='average'?'RX · ACCUMULATED':'RX · LATEST OBSERVATIONS';
+ $('rxInfo').textContent=`${rx.imageFrames} complete-image marker(s), ${rx.hTagsGood} tagged H lines, ${rx.sectionTagsGood} correctly positioned 64-pixel sectors. Only validly positioned observations contribute to the mean.`;
+}
+function stats(){const now=performance.now();
+ $('txRate').textContent=((txBytes-txBytesPrev)/Math.max(.2,(now-(txRateAt||now-1000))/1000)/1000).toFixed(1);txRateAt=now;txBytesPrev=txBytes;
+ $('rxRate').textContent=((rxBytes-rxBytesPrev)/Math.max(.2,(now-(rxRateAt||now-1000))/1000)/1000).toFixed(1);rxRateAt=now;rxBytesPrev=rxBytes;
+ $('rxH').textContent=rx.hTagsGood.toLocaleString('en-US');$('rxS').textContent=rx.sectionTagsGood.toLocaleString('en-US');$('rxV').textContent=rx.vHits.toLocaleString('en-US');$('passes').textContent=rx.imageFrames.toLocaleString('en-US');
+ $('accPixels').textContent=rx.acceptedPixels.toLocaleString('en-US');$('rejectBlocks').textContent=rx.rejectedSectors.toLocaleString('en-US');$('gapCount').textContent=rx.missing.toLocaleString('en-US');
+ $('diag').textContent=`H seen ${rx.hHits} / tagged ${rx.hTagsGood} / invalid IDs ${rx.hTagsBad} · segments tagged ${rx.sectionTagsGood} / rejected ${rx.sectionTagsBad} · valid V ${rx.imageFrames} · ignored pixel observations ${rx.rejectedPixels} · MPX3 max gap ${rxMaxGap} samples · TX max schedule lateness ${maxTxLag} ms · last image ID ${rx.lastImageId??'?'}${rx.formatMismatch!==undefined&&rx.formatMismatch!==null?' · WARNING: TX color mode differs from RX selection':''}`;
+ if(session?.state==='rx'&&$('role').value==='rx'&&lastPacketAt&&now-lastPacketAt>2000){$('rxInfo').textContent='No new PCM radio samples; preserving the accumulated image.';}
+ drawRx();
+}
+async function localTest(){if(browserTestRunning||session?.state==='tx')return;browserTestRunning=true;$('loopTest').disabled=true;
+ try{
+  log('Local analog test: first 16 lines + V marker, with gain/offset/noise. No RF equipment is used.');
+  const tmp=new C.Receiver({mode}),src=C.sourceFromRGBA(C.patternRGBA(),mode),w=C.writeWave(src,mode,222);
+  const len=C.V_HEADER+(C.H_HEADER+(16*C.SECTOR_SAMPLES))*16;
+  const srcRand=(function(){let x=0x12345678;return ()=>{x^=x<<13;x^=x>>>17;x^=x<<5;return (x>>>0)/4294967296;};})();
+  for(let i=0;i<len;i+=512){const take=Math.min(512,len-i),arr=new Uint8Array(take);
+   for(let j=0;j<take;j++){let v=(w[i+j]<<24)>>24;v=Math.round(.8*v+8+(srcRand()-.5)*13);arr[j]=Math.max(-127,Math.min(127,v))&255;}
+   tmp.feedBytes(arr);if(i%8192===0)await sleep(0);
+  }
+  const old=rx;rx=tmp;drawRx();log(`Local simulated channel: H=${tmp.hTagsGood} sectors=${tmp.sectionTagsGood} V=${tmp.imageFrames} placed pixels=${tmp.acceptedPixels}.`);
+  await sleep(1700);rx=old;drawRx();
+ }catch(e){log('Local test failed: '+e.message);status('Local test failed: '+e.message,true);}
+ finally{browserTestRunning=false;$('loopTest').disabled=false;}
+}
+function updateSettings(){rx.rejection=Number($('rejection').value);rx.pauseAverage=!$('accumulate').checked;rx.autoResetOnId=$('autoImage').checked;
+ for(const key of ['rejection','brightness','contrast','saturation'])$(key+'Out').textContent=$ (key).value+(key==='contrast'||key==='saturation'?'×':'');}
+async function save(){const pixels=rx.compose('average',Number($('brightness').value),Number($('contrast').value),Number($('saturation').value));const canvas=document.createElement('canvas');canvas.width=C.W;canvas.height=C.H;canvas.getContext('2d').putImageData(new ImageData(pixels,C.W,C.H),0,0);
+ canvas.toBlob(blob=>{if(!blob)return;const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='CB_IMAGE_1024_accumulated.png';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);},'image/png');
+}
+function init(){for(const m of C.formats){const opt=document.createElement('option');opt.value=m.id;opt.textContent=m.label+` · ${C.getLayout(m.id).frameSeconds.toFixed(1)} s/pass`;$('mode').append(opt);} $('mode').value=mode;usePattern(false);updatePlan();buttons();updateSettings();drawRx();
+ $('role').addEventListener('change',buttons);
+ $('mode').addEventListener('change',()=>{if(session){status('Disconnect before changing video format.',true);$('mode').value=mode;return;}mode=$('mode').value;updatePlan();});
+ $('connect').addEventListener('click',connect);$('disconnect').addEventListener('click',disconnect);
+ $('pickPhoto').addEventListener('click',()=>$('fileInput').click());$('fileInput').addEventListener('change',()=>{void chooseFile($('fileInput').files?.[0]);});
+ $('webcam').addEventListener('click',captureCamera);$('pattern').addEventListener('click',()=>usePattern());
+ $('startTx').addEventListener('click',startTx);$('stopTx').addEventListener('click',stopTx);
+ $('savePNG').addEventListener('click',save);$('resetAverage').addEventListener('click',()=>{rx.clearAccumulator();drawRx();log('Accumulated photo cleared.');});
+ $('loopTest').addEventListener('click',()=>void localTest());
+ for(const id of ['showMode','rejection','brightness','contrast','saturation','accumulate','autoImage'])$(id).addEventListener('input',()=>{updateSettings();drawRx();});
+ // Keep receiver responsive while serial streams; no image is dropped for failing a pixel CRC.
+ setInterval(stats,900);
+ document.addEventListener('visibilitychange',()=>{if(document.hidden&&session?.state==='tx'){log('TX tab hidden: stopping to avoid background timer throttling.');void stopTx();}});
+ log('CB-IMAGE/1024 ready. H+absolute-line tag, every-64-pixel sector sync, repeated V+picture ID. No video CRC.');
+}
+init();
+})();
+</script>
+</body>
+</html>

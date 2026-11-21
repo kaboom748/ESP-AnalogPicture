@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CB-IMAGE/1024 · Analog Image Accumulator</title>
+<style>
+:root{color-scheme:dark;--bg:#090f17;--surface:#132030;--surface2:#192a3c;--line:#30465a;--text:#e4efff;--muted:#a2b9cd;--accent:#42ceb5;--warn:#ffd18a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;color:var(--text)}main{max-width:1580px;margin:auto;padding:18px 20px 42px}header{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:16px}h1,h2,h3{margin:0 0 10px}h1{font-size:1.7rem;letter-spacing:-.03em}h2{font-size:1.05rem}.eyebrow{font-size:.78rem;color:var(--accent);font-weight:800;text-transform:uppercase;letter-spacing:.08em}.sub{color:var(--muted);margin:2px 0}.badge{font-size:.79rem;color:#bbfff1;border:1px solid #33635e;border-radius:10px;padding:6px 9px;background:#102c31}.panel{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:15px;min-width:0}.grid{display:grid;grid-template-columns:1.02fr 1.08fr;gap:14px;align-items:start}.tools{display:grid;grid-template-columns:1fr 1.6fr 1fr 1fr 1fr;gap:12px;margin-bottom:12px;align-items:end}.field>label,.sliderlabel{display:block;color:var(--muted);font-weight:700;font-size:.77rem;margin-bottom:5px}.field input,.field select{display:block;width:100%;padding:9px 10px;border-radius:8px;border:1px solid #466077;background:#0b1726;color:var(--text);font:inherit;min-height:41px}button{background:#243a4c;border:1px solid #47657a;color:var(--text);font:600 .88rem system-ui;padding:9px 12px;border-radius:8px;cursor:pointer;min-height:40px}button:hover:not(:disabled){filter:brightness(1.2)}button:disabled{opacity:.43;cursor:not-allowed}.primary{background:#11675e;border-color:#209886}.danger{background:#653340;border-color:#9e5b66}.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.row button{flex:1}.status{background:#0a2731;border-left:3px solid var(--accent);padding:9px 12px;margin-top:12px;border-radius:5px}.status.error{background:#3c252e;border-color:#e67881}.hidden{display:none!important}.screen{width:100%;aspect-ratio:4/3;background:#000;border:1px solid var(--line);border-radius:9px;overflow:hidden;position:relative}.screen canvas{display:block;width:100%;height:100%;object-fit:contain;image-rendering:auto}.screenlabel{position:absolute;top:8px;left:8px;background:#000b;border-radius:5px;padding:3px 6px;font-size:.7rem}.details{color:var(--muted);font-size:.8rem;margin:8px 0 10px}.controls{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}.controlgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px 14px}.sliderlabel{display:flex;justify-content:space-between}.sliderlabel b{color:var(--accent)}input[type=range]{width:100%;accent-color:var(--accent)}.metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:12px 0}.metric{border:1px solid #294052;background:#0d1a28;border-radius:9px;padding:9px}.metric strong{font-size:1.08rem;display:block;font-variant-numeric:tabular-nums}.metric span{font-size:.71rem;color:var(--muted)}p,li{color:var(--muted)}.tiny{font-size:.78rem}#log{background:#08121c;border:1px solid #2a3f51;border-radius:9px;padding:10px;height:130px;overflow:auto;white-space:pre-wrap;word-break:break-word;font:12px/1.45 ui-monospace,Consolas,monospace;color:#afcadc}.options{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.options label{font-size:.82rem;color:var(--muted)}.options input{accent-color:var(--accent)}#fileInput{display:none}#cameraVideo{display:none}footer{font-size:.78rem;color:var(--muted);margin-top:18px}@media(max-width:1000px){.tools{grid-template-columns:repeat(3,1fr)}.metrics{grid-template-columns:repeat(3,1fr)}}@media(max-width:720px){.grid{grid-template-columns:1fr}.tools{grid-template-columns:repeat(2,1fr)}}@media(max-width:450px){.tools,.controlgrid{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}main{padding:10px}}
+</style>
+</head>
+<body>
+<main>
+<header>
+<div><div class="eyebrow">ESP_PICTURE_V2 · Analog still-picture link</div><h1>CB-IMAGE <span style="color:var(--accent)">1024 / ACCUMULATOR</span></h1><div class="sub">Repeated analog picture → many sync markers → progressively cleaner image</div></div>
+<div class="badge">1024 × 768 · 120,000 PCM8/s · 1.5 Mbaud · SIMPLEX</div>
+</header>
+<section class="panel">
+<h2>1 · Radio and image mode</h2>
+<div class="tools">
+ <div class="field"><label for="role">Station role</label><select id="role"><option value="rx">Receiver / accumulator</option><option value="tx">Transmitter / image source</option></select></div>
+ <div class="field"><label for="mode">Picture format (must match at both ends)</label><select id="mode"></select></div>
+ <div class="field"><label for="frequency">RF frequency (MHz)</label><input id="frequency" type="number" step="0.0001" min="2401" max="2482.5" value="2442.3125"></div>
+ <div class="field"><label for="fine">RX correction (Hz)</label><input id="fine" type="number" step="100" min="-50000" max="50000" value="0"></div>
+ <div class="field"><label for="apwr">TX APWR (0 = strongest)</label><input id="apwr" type="number" min="0" max="191" value="63"></div>
+</div>
+<div class="row"><button id="connect" class="primary">Connect USB serial</button><button id="disconnect" disabled>Disconnect</button><span class="tiny" style="color:var(--muted)">ESP8266 · ESP32 · ESP32-C5 · ESP32-C6 · 1,500,000 baud</span></div>
+<div id="status" class="status">Select your mode and connect your ESP over USB serial.</div>
+</section>
+<div class="metrics">
+<div class="metric"><strong id="frameTime">—</strong><span>One image sweep</span></div>
+<div class="metric"><strong id="rxH">0</strong><span>H line markers</span></div>
+<div class="metric"><strong id="rxS">0</strong><span>64-pixel markers</span></div>
+<div class="metric"><strong id="rxV">0</strong><span>Image V markers</span></div>
+<div class="metric"><strong id="passes">0</strong><span>Recognized passes</span></div>
+<div class="metric"><strong id="accPixels">0</strong><span>Accepted pixel observations</span></div>
+<div class="metric"><strong id="rejectBlocks">0</strong><span>Rejected 64-pixel segments</span></div>
+<div class="metric"><strong id="gapCount">0</strong><span>Missing PCM samples</span></div>
+<div class="metric"><strong id="txRate">0</strong><span>TX PCM kB/s</span></div>
+<div class="metric"><strong id="rxRate">0</strong><span>RX PCM kB/s</span></div>
+</div>
+<div class="grid">
+<section class="panel">
+<h2>2 · Image source (TX)</h2>
+<div class="screen"><canvas id="preview" width="1024" height="768"></canvas><div class="screenlabel">TX SOURCE · STILL IMAGE</div></div>
+<div class="details">Load a JPEG/PNG, freeze one webcam frame, or use the built-in test pattern. The *same* image is transmitted indefinitely.</div>
+<div class="row"><button id="pickPhoto">Load JPEG/PNG…</button><input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp,image/bmp"><button id="webcam">Freeze webcam</button><button id="pattern">Test pattern</button></div>
+<video id="cameraVideo" playsinline muted></video>
+<div class="row" style="margin-top:10px"><button id="startTx" class="primary" disabled>Transmit image continuously</button><button id="stopTx" class="danger" disabled>Stop TX</button></div>
+<div class="details" id="txInfo">Ready · one image repeated without changing the pixel data.</div>
+<div class="details">Sync tips are reserved outside the analog pixel voltage range; a line ID and segment ID are repeated in the raster to prevent accumulation at incorrect coordinates.</div>
+</section>
+<section class="panel">
+<h2>3 · Analog receiver with progressive averaging</h2>
+<div class="screen"><canvas id="received" width="1024" height="768"></canvas><div class="screenlabel" id="rxLabel">RX · AVERAGE</div></div>
+<div class="details" id="rxInfo">Waiting for line markers. Display updates as each received segment is placed at its absolute X/Y position.</div>
+<div class="row"><button id="savePNG">Save accumulated PNG</button><button id="resetAverage">Clear accumulated image</button><button id="loopTest">Local simulated RF test</button></div>
+<div class="controls">
+<div class="options"><label>Display <select id="showMode"><option value="average">Accumulated image</option><option value="raw">Latest received samples</option></select></label><label><input type="checkbox" id="accumulate" checked> Accumulate</label><label><input type="checkbox" id="autoImage" checked> Auto-reset on new picture ID</label></div>
+<div class="controlgrid" style="margin-top:10px">
+ <div><div class="sliderlabel">Outlier rejection <b id="rejectionOut">76</b></div><input id="rejection" type="range" min="20" max="120" step="2" value="76"></div>
+ <div><div class="sliderlabel">Brightness <b id="brightnessOut">0</b></div><input id="brightness" type="range" min="-100" max="100" value="0"></div>
+ <div><div class="sliderlabel">Contrast <b id="contrastOut">1.00×</b></div><input id="contrast" type="range" min="0.3" max="2.5" step="0.05" value="1"></div>
+ <div><div class="sliderlabel">Saturation <b id="saturationOut">1.00×</b></div><input id="saturation" type="range" min="0" max="2.5" step="0.05" value="1"></div>
+</div>
+</div>
+<p class="tiny" style="margin:11px 0 0">Analog video pixels have no CRC and are never retransmitted. Only the out-of-picture synchronization tags carry short check bits, so misplaced lines and sections can be skipped during averaging.</p>
+</section>
+</div>
+<section class="panel" style="margin-top:14px">
+<h2>4 · Transport / synchronization diagnostics</h2>
+<div id="diag" class="details">Not connected.</div>
+<div id="log"></div>
+</section>
+<footer>Experimental amateur radio concept · no guarantee of RF interoperability, spectral compliance or real-world image sharpness. Test with authorized equipment and permitted RF settings.</footer>
+</main>
+<script src="image-codec.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
